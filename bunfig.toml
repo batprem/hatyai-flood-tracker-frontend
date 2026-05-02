@@ -1,3 +1,5 @@
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
-env = "BUN_PUBLIC_*"
+# Inline `process.env.<NAME>` literals at dev/build time. `VITE_*` follows the
+# project-wide convention (e.g. `VITE_API_URL` for the backend base URL).
+env = "VITE_*"

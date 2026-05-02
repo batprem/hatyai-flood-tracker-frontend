@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
 import { cn } from "@/lib/utils";
 
 type Language = "th" | "en";
@@ -232,7 +233,7 @@ function getStepLabel(step: ForecastStep, language: Language) {
 
 export function App() {
   const [language, setLanguage] = useState<Language>("th");
-  const [activeLayer, setActiveLayer] = useState<MapLayer>("risk");
+  const [activeLayer, setActiveLayer] = useState<MapLayer>("rain");
   const [forecastIndex, setForecastIndex] = useState(1);
   const [selectedStationId, setSelectedStationId] = useState(stations[1].id);
 
@@ -246,6 +247,15 @@ export function App() {
     [selectedStationId]
   );
   const maxRain = Math.max(...forecast.map((step) => step.rainMm));
+
+  // Live forecast frames replace the previous mock rainfall cells. The hook
+  // returns ready-made overlay/sidebar/legend slots so this page can drop
+  // them into the existing map and aside layouts (HFT-13).
+  const rainfallForecast = useRainfallForecastSlots({
+    active: activeLayer === "rain",
+    language,
+    provider: "gfs",
+  });
 
   return (
     <main className="min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -509,11 +519,8 @@ export function App() {
                 )}
 
                 {activeLayer === "rain" && (
-                  <div className="absolute inset-0">
-                    <RainCell className="left-[12%] top-[18%]" amount="24mm" />
-                    <RainCell className="left-[46%] top-[22%]" amount="61mm" strong />
-                    <RainCell className="left-[68%] top-[46%]" amount="38mm" />
-                    <RainCell className="left-[30%] top-[64%]" amount="47mm" strong />
+                  <div className="absolute inset-0" data-testid="forecast-rainfall-overlay">
+                    {rainfallForecast.overlay}
                   </div>
                 )}
 
@@ -560,6 +567,21 @@ export function App() {
           </Card>
 
           <aside className="grid gap-4">
+            <Card className="border-0 bg-white text-slate-950 shadow-xl">
+              <CardHeader>
+                <CardDescription className="font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  {language === "th" ? "ฝนคาดการณ์ (ข้อมูลจริง)" : "Forecast Rainfall (Live)"}
+                </CardDescription>
+                <CardTitle className="text-2xl font-black">
+                  {language === "th" ? "GFS · ลุ่มน้ำคลองอู่ตะเภา" : "GFS · U-Tapao Basin"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {rainfallForecast.sidebar}
+                {rainfallForecast.legend}
+              </CardContent>
+            </Card>
+
             <Card className="border-0 bg-white text-slate-950 shadow-xl">
               <CardHeader>
                 <CardDescription className="font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -674,27 +696,5 @@ function MapBlob({ className, label }: { className: string; label: string }) {
   );
 }
 
-function RainCell({
-  className,
-  amount,
-  strong = false,
-}: {
-  className: string;
-  amount: string;
-  strong?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "absolute rounded-3xl border border-sky-100 px-4 py-3 text-sm font-black text-white shadow-xl backdrop-blur",
-        strong ? "bg-blue-700/70" : "bg-sky-500/60",
-        className
-      )}
-    >
-      <CloudRain className="mb-1 size-5" />
-      {amount}
-    </div>
-  );
-}
 
 export default App;

@@ -15,3 +15,19 @@ declare module "*.module.css" {
   const classes: { readonly [key: string]: string };
   export = classes;
 }
+
+/**
+ * Public env vars exposed to the browser bundle.
+ *
+ * The Bun bundler replaces literal `process.env.<NAME>` references with their
+ * runtime values when the variable name is allow-listed in `bunfig.toml`
+ * (`[serve.static].env`) for dev and via `define` in `build.ts` for production.
+ *
+ * `VITE_API_URL` is the project-wide convention for the backend base URL.
+ */
+declare namespace NodeJS {
+  interface ProcessEnv {
+    readonly VITE_API_URL?: string;
+    readonly NODE_ENV?: "development" | "production" | "test";
+  }
+}

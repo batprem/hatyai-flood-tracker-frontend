@@ -140,6 +140,18 @@ const entrypoints = [...new Bun.Glob("**.html").scanSync("src")]
   .filter(dir => !dir.includes("node_modules"));
 console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? "file" : "files"} to process\n`);
 
+// Build-time replacements for literal `process.env.<NAME>` references in the
+// browser bundle. The dev server inlines these via `bunfig.toml`'s `env` glob,
+// but the standalone bundler needs explicit `define` entries.
+const envDefines: Record<string, string> = {
+  "process.env.NODE_ENV": JSON.stringify("production"),
+};
+for (const [key, value] of Object.entries(process.env)) {
+  if (key.startsWith("VITE_") && typeof value === "string") {
+    envDefines[`process.env.${key}`] = JSON.stringify(value);
+  }
+}
+
 // Build all the HTML files
 const result = await build({
   entrypoints,
@@ -148,9 +160,7 @@ const result = await build({
   minify: true,
   target: "browser",
   sourcemap: "linked",
-  define: {
-    "process.env.NODE_ENV": JSON.stringify("production"),
-  },
+  define: envDefines,
   ...cliConfig, // Merge in any CLI-provided options
 });
 
