@@ -23,12 +23,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { BasinMap, type BasinMapLayer } from "@/components/BasinMap";
 import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
+import type { MapStation } from "@/components/map/stationsSource";
+import type { RiskOverlayZone } from "@/components/map/riskSource";
+import { FORECAST_FRAMES_COPY } from "@/lib/i18n/forecastFrames";
 import { cn } from "@/lib/utils";
 
 type Language = "th" | "en";
 type RiskLevel = "green" | "yellow" | "orange" | "red";
-type MapLayer = "risk" | "rain" | "stations";
+type MapLayer = BasinMapLayer;
 
 type RiskMeta = {
   label: Record<Language, string>;
@@ -54,7 +58,8 @@ type Station = {
   waterLevelM: number;
   trend: "rising" | "stable" | "falling";
   risk: RiskLevel;
-  position: { top: string; left: string };
+  /** [longitude, latitude] in EPSG:4326 inside the U-Tapao basin bbox. */
+  coordinates: readonly [number, number];
 };
 
 const riskOrder: RiskLevel[] = ["green", "yellow", "orange", "red"];
@@ -195,7 +200,7 @@ const stations: Station[] = [
     waterLevelM: 2.8,
     trend: "rising",
     risk: "orange",
-    position: { top: "54%", left: "42%" },
+    coordinates: [100.47, 6.96],
   },
   {
     id: "utapao-bridge",
@@ -204,7 +209,7 @@ const stations: Station[] = [
     waterLevelM: 3.2,
     trend: "rising",
     risk: "red",
-    position: { top: "40%", left: "56%" },
+    coordinates: [100.55, 7.03],
   },
   {
     id: "songkhla-outlet",
@@ -213,7 +218,59 @@ const stations: Station[] = [
     waterLevelM: 1.9,
     trend: "stable",
     risk: "yellow",
-    position: { top: "26%", left: "70%" },
+    coordinates: [100.62, 7.18],
+  },
+];
+
+/**
+ * Mock basin risk zones used by the dashboard's "Risk" map tab.
+ *
+ * Coordinates are approximate hand-drawn polygons covering the lower U-Tapao
+ * canal stretch and the Songkhla Lake outlet. Replace with authoritative
+ * basin/floodplain polygons in HFT-1.5.D when ingestion lands.
+ */
+const riskOverlay: RiskOverlayZone[] = [
+  {
+    id: "lower-utapao",
+    level: "orange",
+    labelEn: "Lower U-Tapao floodplain",
+    labelTh: "พื้นที่น้ำท่วมตอนล่างคลองอู่ตะเภา",
+    ring: [
+      [100.42, 6.92],
+      [100.55, 6.92],
+      [100.58, 7.0],
+      [100.5, 7.04],
+      [100.42, 7.0],
+      [100.42, 6.92],
+    ],
+  },
+  {
+    id: "hatyai-core",
+    level: "red",
+    labelEn: "Hat Yai municipal core",
+    labelTh: "พื้นที่เทศบาลหาดใหญ่",
+    ring: [
+      [100.5, 7.0],
+      [100.6, 7.0],
+      [100.62, 7.07],
+      [100.52, 7.09],
+      [100.48, 7.05],
+      [100.5, 7.0],
+    ],
+  },
+  {
+    id: "songkhla-outlet",
+    level: "yellow",
+    labelEn: "Songkhla Lake outlet",
+    labelTh: "ปากทะเลสาบสงขลา",
+    ring: [
+      [100.58, 7.14],
+      [100.7, 7.12],
+      [100.74, 7.22],
+      [100.62, 7.24],
+      [100.56, 7.18],
+      [100.58, 7.14],
+    ],
   },
 ];
 
@@ -250,12 +307,29 @@ export function App() {
 
   // Live forecast frames replace the previous mock rainfall cells. The hook
   // returns ready-made overlay/sidebar/legend slots so this page can drop
-  // them into the existing map and aside layouts (HFT-13).
+  // them into the existing map and aside layouts (HFT-13). For HFT-17 we keep
+  // the data-fetching responsibility here but render the actual rainfall grid
+  // through MapLibre via `<BasinMap>` instead of the absolutely-positioned
+  // CSS overlay.
   const rainfallForecast = useRainfallForecastSlots({
     active: activeLayer === "rain",
     language,
     provider: "gfs",
   });
+  const mapCopy = FORECAST_FRAMES_COPY[language];
+  const mapStations = useMemo<MapStation[]>(
+    () =>
+      stations.map((station) => ({
+        id: station.id,
+        coordinates: station.coordinates,
+        risk: station.risk,
+        waterLevelM: station.waterLevelM,
+        trend: station.trend,
+        nameEn: station.name.en,
+        nameTh: station.name.th,
+      })),
+    [],
+  );
 
   return (
     <main className="min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -493,59 +567,35 @@ export function App() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-slate-200 bg-[linear-gradient(135deg,_#dff8ff_0%,_#ecfeff_34%,_#d1fae5_35%,_#f8fafc_70%,_#e0f2fe_100%)]">
-                <div className="absolute left-[18%] top-[10%] h-[86%] w-14 rotate-[18deg] rounded-full bg-cyan-500/35 blur-[1px]" />
-                <div className="absolute left-[36%] top-[0%] h-[100%] w-9 rotate-[7deg] rounded-full bg-sky-500/40" />
-                <div className="absolute bottom-[-18%] right-[-4%] h-64 w-64 rounded-full bg-blue-400/35" />
-                <div className="absolute left-4 top-4 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-xs font-bold text-slate-700 shadow">
-                  Hat Yai
-                </div>
-
-                {activeLayer === "risk" && (
-                  <div className="absolute inset-0">
-                    <MapBlob
-                      className="left-[32%] top-[34%] h-44 w-56 bg-orange-400/45"
-                      label="Orange risk"
-                    />
-                    <MapBlob
-                      className="left-[49%] top-[24%] h-36 w-44 bg-red-500/40"
-                      label="Red risk"
-                    />
-                    <MapBlob
-                      className="left-[12%] top-[54%] h-28 w-40 bg-amber-300/45"
-                      label="Yellow risk"
-                    />
-                  </div>
-                )}
+              <div
+                className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100"
+                data-testid="basin-map-shell"
+              >
+                <BasinMap
+                  rainfallFrames={rainfallForecast.frames}
+                  selectedRainfallFrame={rainfallForecast.visibleFrame}
+                  stations={mapStations}
+                  riskOverlay={riskOverlay}
+                  activeLayer={activeLayer}
+                  selectedStationId={selectedStationId}
+                  language={language}
+                  copy={mapCopy}
+                  onSelectStation={(stationId) => {
+                    setSelectedStationId(stationId);
+                    setActiveLayer("stations");
+                  }}
+                />
 
                 {activeLayer === "rain" && (
-                  <div className="absolute inset-0" data-testid="forecast-rainfall-overlay">
+                  <div
+                    className="pointer-events-none absolute inset-x-3 top-3 z-10"
+                    data-testid="forecast-rainfall-overlay"
+                  >
                     {rainfallForecast.overlay}
                   </div>
                 )}
 
-                {stations.map((station) => (
-                  <button
-                    type="button"
-                    key={station.id}
-                    onClick={() => {
-                      setSelectedStationId(station.id);
-                      setActiveLayer("stations");
-                    }}
-                    className={cn(
-                      "absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 p-2 shadow-xl transition hover:scale-110",
-                      riskMeta[station.risk].mapClass,
-                      selectedStationId === station.id &&
-                        "ring-4 ring-slate-950/30"
-                    )}
-                    style={station.position}
-                    aria-label={station.name[language]}
-                  >
-                    <MapPin className="size-5 text-white drop-shadow" />
-                  </button>
-                ))}
-
-                <div className="absolute bottom-4 left-4 right-4 rounded-3xl border border-white/70 bg-white/85 p-3 shadow-xl backdrop-blur">
+                <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 rounded-3xl border border-white/70 bg-white/90 p-3 shadow-xl backdrop-blur">
                   <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                     {riskOrder.map((level) => (
                       <div key={level} className="flex items-center gap-2">
@@ -561,6 +611,12 @@ export function App() {
                       </div>
                     ))}
                   </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-500">
+                    {mapCopy.mapAttributionLabel}: {mapCopy.mapTileAttribution}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {mapCopy.mapTileLicense}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -683,18 +739,5 @@ function DataState({ icon, label }: { icon: ReactNode; label: string }) {
     </div>
   );
 }
-
-function MapBlob({ className, label }: { className: string; label: string }) {
-  return (
-    <div
-      className={cn(
-        "absolute rounded-[48%_52%_42%_58%/55%_40%_60%_45%] blur-sm",
-        className
-      )}
-      aria-label={label}
-    />
-  );
-}
-
 
 export default App;

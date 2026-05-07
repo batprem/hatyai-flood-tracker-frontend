@@ -44,6 +44,14 @@ export interface ForecastFramesCopy {
   selectFrame: string;
   cellTooltip: (rainMm: number) => string;
   refresh: string;
+  /** Visible map attribution prefix (e.g. label before the source list). */
+  mapAttributionLabel: string;
+  /** Tile-provider attribution shown on the MapLibre canvas. */
+  mapTileAttribution: string;
+  /** License/permission note shown alongside tile attribution. */
+  mapTileLicense: string;
+  /** Accessible label for the MapLibre map container. */
+  mapAriaLabel: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -82,6 +90,12 @@ const TH: ForecastFramesCopy = {
   selectFrame: "เลือกกรอบเวลาพยากรณ์",
   cellTooltip: (rainMm: number) => `ฝนสะสม ${rainMm.toFixed(1)} มม.`,
   refresh: "รีเฟรช",
+  mapAttributionLabel: "เครดิตแผนที่",
+  mapTileAttribution:
+    "© ผู้ร่วมสมทบ OpenStreetMap · ไทล์โดย MapLibre demotiles",
+  mapTileLicense:
+    "ไทล์อยู่ภายใต้สัญญาอนุญาต ODbL สำหรับการใช้งานสาธารณะแบบไม่แสวงหากำไร",
+  mapAriaLabel: "แผนที่ลุ่มน้ำคลองอู่ตะเภาและทะเลสาบสงขลา",
 };
 
 const EN: ForecastFramesCopy = {
@@ -120,6 +134,12 @@ const EN: ForecastFramesCopy = {
   selectFrame: "Select forecast frame",
   cellTooltip: (rainMm: number) => `${rainMm.toFixed(1)} mm rainfall`,
   refresh: "Refresh",
+  mapAttributionLabel: "Map attribution",
+  mapTileAttribution:
+    "© OpenStreetMap contributors · Tiles by MapLibre demotiles",
+  mapTileLicense:
+    "Tiles available under ODbL for non-commercial public-awareness use.",
+  mapAriaLabel: "Map of the U-Tapao canal and Songkhla Lake basin",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {

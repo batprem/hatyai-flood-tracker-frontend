@@ -39,6 +39,8 @@ export interface RainfallForecastSlots {
   sidebar: ReactNode;
   /** Reusable legend block. */
   legend: ReactNode;
+  /** All available forecast frames (sorted by the backend). */
+  frames: ReadonlyArray<ForecastFrame>;
   /** Current visible frame (for upstream consumers). */
   visibleFrame: ForecastFrame | null;
   /** Freshness block from the latest successful response. */
@@ -120,7 +122,7 @@ export function useRainfallForecastSlots({
 
   const legend = <ForecastRainfallLegend copy={copy} />;
 
-  return { overlay, sidebar, legend, visibleFrame, freshness, phase };
+  return { overlay, sidebar, legend, frames, visibleFrame, freshness, phase };
 }
 
 interface ForecastOverlayProps {
