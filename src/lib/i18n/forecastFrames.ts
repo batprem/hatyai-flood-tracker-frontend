@@ -52,6 +52,12 @@ export interface ForecastFramesCopy {
   mapTileLicense: string;
   /** Accessible label for the MapLibre map container. */
   mapAriaLabel: string;
+  /** Heading shown when the basin map crashes (error boundary fallback). */
+  mapErrorTitle: string;
+  /** Body copy explaining the map failure to public users. */
+  mapErrorBody: string;
+  /** Action label to reload the page after a map failure. */
+  mapErrorReload: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -96,6 +102,10 @@ const TH: ForecastFramesCopy = {
   mapTileLicense:
     "ไทล์อยู่ภายใต้สัญญาอนุญาต ODbL สำหรับการใช้งานสาธารณะแบบไม่แสวงหากำไร",
   mapAriaLabel: "แผนที่ลุ่มน้ำคลองอู่ตะเภาและทะเลสาบสงขลา",
+  mapErrorTitle: "ไม่สามารถแสดงแผนที่ได้ในขณะนี้",
+  mapErrorBody:
+    "อุปกรณ์หรือเครือข่ายของคุณอาจไม่รองรับ คุณยังสามารถใช้ข้อมูลส่วนอื่น ๆ ในหน้านี้ได้",
+  mapErrorReload: "โหลดหน้าใหม่",
 };
 
 const EN: ForecastFramesCopy = {
@@ -140,6 +150,10 @@ const EN: ForecastFramesCopy = {
   mapTileLicense:
     "Tiles available under ODbL for non-commercial public-awareness use.",
   mapAriaLabel: "Map of the U-Tapao canal and Songkhla Lake basin",
+  mapErrorTitle: "The map cannot be displayed right now",
+  mapErrorBody:
+    "Your device or network may not support the map. The rest of this page is still available.",
+  mapErrorReload: "Reload page",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {

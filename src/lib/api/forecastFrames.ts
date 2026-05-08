@@ -174,12 +174,23 @@ export class ForecastFramesApiError extends Error {
  * Resolve the backend base URL from build-time `VITE_API_URL`.
  *
  * Bun replaces literal `process.env.VITE_API_URL` references with their value
- * at build/dev time (allow-listed via `bunfig.toml` and `build.ts`). Falls
- * back to same-origin relative paths so the app still loads if the env var is
- * unset, but in practice deployments must set it.
+ * at build/dev time (allow-listed via `bunfig.toml` and `build.ts`). When the
+ * variable is unset the bundler substitutes the literal `undefined`; we still
+ * guard against `process` being absent in the browser global so a future
+ * tooling change cannot crash boot before any fetch is attempted (HFT-17).
+ * Falls back to same-origin relative paths so the app still loads.
  */
 function resolveBaseUrl(): string {
-  const fromEnv = process.env.VITE_API_URL;
+  // Reading the literal expression is what Bun replaces at build/dev time.
+  // `build.ts` substitutes unset vars with the literal `undefined`, but a
+  // `try/catch` keeps the function safe under tooling that does not perform
+  // the replacement at all (browser runtime where `process` is undefined).
+  let fromEnv: string | undefined;
+  try {
+    fromEnv = process.env.VITE_API_URL;
+  } catch {
+    fromEnv = undefined;
+  }
   if (typeof fromEnv === "string" && fromEnv.length > 0) {
     return fromEnv.replace(/\/$/, "");
   }

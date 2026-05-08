@@ -143,11 +143,36 @@ console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 
 // Build-time replacements for literal `process.env.<NAME>` references in the
 // browser bundle. The dev server inlines these via `bunfig.toml`'s `env` glob,
 // but the standalone bundler needs explicit `define` entries.
+//
+// IMPORTANT: every `VITE_*` env var read by browser code MUST appear here so
+// the literal `process.env.VITE_X` reference is replaced even when the var is
+// unset. Otherwise the un-substituted reference reaches the browser, where
+// `process` is not defined, and the whole React tree crashes at boot
+// (see HFT-17 regression). For unset vars we substitute the literal string
+// `"undefined"` so the inlined expression evaluates to `undefined` at runtime.
+const KNOWN_BROWSER_ENV_VARS: ReadonlyArray<string> = [
+  "VITE_API_URL",
+  "VITE_MAPTILER_KEY",
+];
+
 const envDefines: Record<string, string> = {
   "process.env.NODE_ENV": JSON.stringify("production"),
 };
+for (const key of KNOWN_BROWSER_ENV_VARS) {
+  const value = process.env[key];
+  envDefines[`process.env.${key}`] =
+    typeof value === "string" ? JSON.stringify(value) : "undefined";
+}
+// Also inline any additional VITE_* vars present in the build environment so
+// teams can add new ones without immediately editing this file. Vars added
+// here without being added to `KNOWN_BROWSER_ENV_VARS` still risk the
+// unset-var crash, so prefer the allow-list above.
 for (const [key, value] of Object.entries(process.env)) {
-  if (key.startsWith("VITE_") && typeof value === "string") {
+  if (
+    key.startsWith("VITE_") &&
+    typeof value === "string" &&
+    !(`process.env.${key}` in envDefines)
+  ) {
     envDefines[`process.env.${key}`] = JSON.stringify(value);
   }
 }

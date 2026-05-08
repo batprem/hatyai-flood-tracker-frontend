@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BasinMap, type BasinMapLayer } from "@/components/BasinMap";
+import { MapErrorBoundary } from "@/components/MapErrorBoundary";
 import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
 import type { MapStation } from "@/components/map/stationsSource";
 import type { RiskOverlayZone } from "@/components/map/riskSource";
@@ -571,20 +572,22 @@ export function App() {
                 className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-100"
                 data-testid="basin-map-shell"
               >
-                <BasinMap
-                  rainfallFrames={rainfallForecast.frames}
-                  selectedRainfallFrame={rainfallForecast.visibleFrame}
-                  stations={mapStations}
-                  riskOverlay={riskOverlay}
-                  activeLayer={activeLayer}
-                  selectedStationId={selectedStationId}
-                  language={language}
-                  copy={mapCopy}
-                  onSelectStation={(stationId) => {
-                    setSelectedStationId(stationId);
-                    setActiveLayer("stations");
-                  }}
-                />
+                <MapErrorBoundary copy={mapCopy}>
+                  <BasinMap
+                    rainfallFrames={rainfallForecast.frames}
+                    selectedRainfallFrame={rainfallForecast.visibleFrame}
+                    stations={mapStations}
+                    riskOverlay={riskOverlay}
+                    activeLayer={activeLayer}
+                    selectedStationId={selectedStationId}
+                    language={language}
+                    copy={mapCopy}
+                    onSelectStation={(stationId) => {
+                      setSelectedStationId(stationId);
+                      setActiveLayer("stations");
+                    }}
+                  />
+                </MapErrorBoundary>
 
                 {activeLayer === "rain" && (
                   <div
