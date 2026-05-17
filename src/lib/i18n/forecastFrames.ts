@@ -58,6 +58,18 @@ export interface ForecastFramesCopy {
   mapErrorBody: string;
   /** Action label to reload the page after a map failure. */
   mapErrorReload: string;
+  /** Label prefix before a station's last-observed timestamp. */
+  stationObservedAt: string;
+  /** Chip label when station data is older than the stale threshold. */
+  stationStaleChip: string;
+  /** Tooltip explaining why the station reading is flagged stale. */
+  stationStaleDetail: string;
+  /** Forecast data freshness label shown in the risk card data-state row. */
+  forecastFreshnessRow: (label: string) => string;
+  /** Label for the data-source row in the risk card. */
+  dataSource: string;
+  /** Forecast API error shown in the risk card data-state row. */
+  forecastErrorRow: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -106,6 +118,12 @@ const TH: ForecastFramesCopy = {
   mapErrorBody:
     "อุปกรณ์หรือเครือข่ายของคุณอาจไม่รองรับ คุณยังสามารถใช้ข้อมูลส่วนอื่น ๆ ในหน้านี้ได้",
   mapErrorReload: "โหลดหน้าใหม่",
+  stationObservedAt: "วัดเมื่อ",
+  stationStaleChip: "ข้อมูลเก่า",
+  stationStaleDetail: "ข้อมูลสถานีนี้อาจล้าสมัย (เกิน 2 ชั่วโมง)",
+  forecastFreshnessRow: (label: string) => `สถานะพยากรณ์: ${label}`,
+  dataSource: "แหล่งข้อมูล: GFS + ECMWF Open Data",
+  forecastErrorRow: "พยากรณ์: ไม่สามารถโหลดได้",
 };
 
 const EN: ForecastFramesCopy = {
@@ -154,6 +172,12 @@ const EN: ForecastFramesCopy = {
   mapErrorBody:
     "Your device or network may not support the map. The rest of this page is still available.",
   mapErrorReload: "Reload page",
+  stationObservedAt: "Observed at",
+  stationStaleChip: "Stale",
+  stationStaleDetail: "This station reading may be out of date (over 2 hours old).",
+  forecastFreshnessRow: (label: string) => `Forecast status: ${label}`,
+  dataSource: "Sources: GFS + ECMWF Open Data",
+  forecastErrorRow: "Forecast: could not load",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Waves,
+  WifiOff,
 } from "lucide-react";
 
 import "./index.css";
@@ -28,7 +29,14 @@ import { MapErrorBoundary } from "@/components/MapErrorBoundary";
 import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
 import type { MapStation } from "@/components/map/stationsSource";
 import type { RiskOverlayZone } from "@/components/map/riskSource";
-import { FORECAST_FRAMES_COPY } from "@/lib/i18n/forecastFrames";
+import type { ForecastFreshness } from "@/lib/api/forecastFrames";
+import type { ForecastFramesPhase } from "@/lib/hooks/useForecastFrames";
+import {
+  FORECAST_FRAMES_COPY,
+  formatDateTime,
+  freshnessLabel,
+  type Language as ForecastLanguage,
+} from "@/lib/i18n/forecastFrames";
 import { cn } from "@/lib/utils";
 
 type Language = "th" | "en";
@@ -61,6 +69,12 @@ type Station = {
   risk: RiskLevel;
   /** [longitude, latitude] in EPSG:4326 inside the U-Tapao basin bbox. */
   coordinates: readonly [number, number];
+  /**
+   * UTC datetime of the most recent observation.
+   * Mock stations use a fixed past time; replace with API `observedAt` when
+   * the station endpoint is live.
+   */
+  observedAt: Date;
 };
 
 const riskOrder: RiskLevel[] = ["green", "yellow", "orange", "red"];
@@ -128,9 +142,6 @@ const copy = {
     riskScale: "ระดับความเสี่ยง",
     mapTitle: "แผนที่สถานการณ์",
     mapSubtitle: "ชั้นข้อมูลจำลองสำหรับฝนคาดการณ์ ความเสี่ยง และสถานีวัดน้ำ",
-    freshness: "ข้อมูลล่าสุด 12:20 น.",
-    source: "แหล่งข้อมูล: GFS + ECMWF Open Data, สถานีวัดน้ำจำลอง",
-    stale: "สถานะข้อมูล: สดใหม่",
     confidence: "ความมั่นใจ",
     rain: "ฝนสะสม",
     water: "ระดับน้ำ",
@@ -161,9 +172,6 @@ const copy = {
     riskScale: "Risk Scale",
     mapTitle: "Situation Map",
     mapSubtitle: "Mock layers for forecast rain, basin risk, and water stations",
-    freshness: "Last updated 12:20",
-    source: "Sources: GFS + ECMWF Open Data, mock water stations",
-    stale: "Data state: fresh",
     confidence: "Confidence",
     rain: "Rainfall",
     water: "Water level",
@@ -193,6 +201,19 @@ const forecast: ForecastStep[] = [
   { hour: "+72h", rainMm: 34, level: "yellow", confidence: 58 },
 ];
 
+/**
+ * Mock station observation timestamps.
+ *
+ * These are fixed offsets from the page-load time so the stale indicator
+ * behaves consistently without polling. Khlong Wa and U-Tapao Bridge have
+ * recent readings; Songkhla Lake Outlet is intentionally set to >2 hours
+ * ago to demonstrate the stale indicator.
+ *
+ * Replace these with `observedAt` values from the station API when live.
+ */
+const NOW = new Date();
+const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60 * 1000);
+
 const stations: Station[] = [
   {
     id: "khlong-wa",
@@ -202,6 +223,7 @@ const stations: Station[] = [
     trend: "rising",
     risk: "orange",
     coordinates: [100.47, 6.96],
+    observedAt: minutesAgo(18),
   },
   {
     id: "utapao-bridge",
@@ -211,6 +233,7 @@ const stations: Station[] = [
     trend: "rising",
     risk: "red",
     coordinates: [100.55, 7.03],
+    observedAt: minutesAgo(45),
   },
   {
     id: "songkhla-outlet",
@@ -220,6 +243,7 @@ const stations: Station[] = [
     trend: "stable",
     risk: "yellow",
     coordinates: [100.62, 7.18],
+    observedAt: minutesAgo(145),
   },
 ];
 
@@ -450,20 +474,12 @@ export function App() {
                 />
               </div>
 
-              <div className="grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
-                <DataState
-                  icon={<Clock3 className="size-4" />}
-                  label={t.freshness as string}
-                />
-                <DataState
-                  icon={<ShieldCheck className="size-4" />}
-                  label={t.stale as string}
-                />
-                <DataState
-                  icon={<RadioTower className="size-4" />}
-                  label={t.source as string}
-                />
-              </div>
+              <ForecastDataStateRow
+                phase={rainfallForecast.phase}
+                freshness={rainfallForecast.freshness}
+                language={language}
+                mapCopy={mapCopy}
+              />
             </CardContent>
           </Card>
 
@@ -655,6 +671,11 @@ export function App() {
                   <MapPin className="size-4" />
                   {selectedStation.area[language]}
                 </p>
+                <StationObservationRow
+                  observedAt={selectedStation.observedAt}
+                  language={language}
+                  mapCopy={mapCopy}
+                />
                 <div className="grid grid-cols-2 gap-3">
                   <MetricTile
                     icon={<Droplets className="size-4" />}
@@ -739,6 +760,123 @@ function DataState({ icon, label }: { icon: ReactNode; label: string }) {
     <div className="flex items-start gap-2 text-sm text-slate-600">
       <span className="mt-0.5 text-cyan-700">{icon}</span>
       <span>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * The stale threshold for station observations.
+ * Readings older than this are flagged with a stale indicator.
+ */
+const STATION_STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/**
+ * Replaces the hard-coded DataState row in the risk card with live forecast
+ * freshness, a source label, and an error indicator when the API fails.
+ *
+ * Renders three cells to match the original 3-column grid layout.
+ */
+function ForecastDataStateRow({
+  phase,
+  freshness,
+  language,
+  mapCopy,
+}: {
+  phase: ForecastFramesPhase;
+  freshness: ForecastFreshness | null;
+  language: Language;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  const statusLabel = freshnessLabel(freshness?.status, mapCopy);
+  const retrievedAt = freshness?.retrievedAt
+    ? formatDateTime(freshness.retrievedAt, language as ForecastLanguage)
+    : null;
+
+  const isError = phase === "error";
+  const isStale = phase === "stale" || freshness?.status === "stale" || freshness?.status === "delayed";
+
+  return (
+    <div
+      className={cn(
+        "grid gap-3 rounded-3xl border p-4 sm:grid-cols-3",
+        isError
+          ? "border-red-200 bg-red-50"
+          : isStale
+            ? "border-orange-200 bg-orange-50"
+            : "border-slate-200 bg-slate-50",
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      {/* Freshness cell */}
+      <DataState
+        icon={
+          isError ? (
+            <WifiOff className="size-4 text-red-600" />
+          ) : (
+            <ShieldCheck className={cn("size-4", isStale ? "text-orange-600" : "text-cyan-700")} />
+          )
+        }
+        label={
+          isError
+            ? mapCopy.forecastErrorRow
+            : mapCopy.forecastFreshnessRow(statusLabel)
+        }
+      />
+
+      {/* Retrieved-at / loading cell */}
+      <DataState
+        icon={<Clock3 className="size-4" />}
+        label={
+          phase === "loading"
+            ? mapCopy.loading
+            : retrievedAt
+              ? `${mapCopy.freshnessRetrievedAt}: ${retrievedAt}`
+              : mapCopy.freshnessUnknown
+        }
+      />
+
+      {/* Source cell */}
+      <DataState
+        icon={<RadioTower className="size-4" />}
+        label={mapCopy.dataSource}
+      />
+    </div>
+  );
+}
+
+/**
+ * Shows the station's last observation timestamp and a stale chip when the
+ * reading is older than STATION_STALE_THRESHOLD_MS.
+ */
+function StationObservationRow({
+  observedAt,
+  language,
+  mapCopy,
+}: {
+  observedAt: Date;
+  language: Language;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  const isStale = Date.now() - observedAt.getTime() > STATION_STALE_THRESHOLD_MS;
+  const formattedTime = formatDateTime(observedAt, language as ForecastLanguage);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+      <Clock3 className="size-4 shrink-0" aria-hidden />
+      <span>
+        {mapCopy.stationObservedAt}: {formattedTime}
+      </span>
+      {isStale && (
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-800"
+          title={mapCopy.stationStaleDetail}
+          role="status"
+        >
+          <span className="size-1.5 rounded-full bg-orange-500" aria-hidden />
+          {mapCopy.stationStaleChip}
+        </span>
+      )}
     </div>
   );
 }
