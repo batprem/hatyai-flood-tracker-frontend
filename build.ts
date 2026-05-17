@@ -143,14 +143,19 @@ console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 
 // Build-time replacements for literal `process.env.<NAME>` references in the
 // browser bundle. The dev server inlines these via `bunfig.toml`'s `env` glob,
 // but the standalone bundler needs explicit `define` entries.
+//
+// Known VITE_* vars are always included with an empty-string fallback so that
+// no unresolved `process.env.*` reference survives into the browser bundle
+// (which would throw ReferenceError since `process` is not a browser global).
+const KNOWN_VITE_VARS = ["VITE_API_URL", "VITE_MAPTILER_KEY"] as const;
 const envDefines: Record<string, string> = {
   "process.env.NODE_ENV": JSON.stringify("production"),
 };
-for (const [key, value] of Object.entries(process.env)) {
-  if (key.startsWith("VITE_") && typeof value === "string") {
-    envDefines[`process.env.${key}`] = JSON.stringify(value);
-  }
-}
+const viteKeys = new Set<string>(KNOWN_VITE_VARS);
+Object.keys(process.env).filter(k => k.startsWith("VITE_")).forEach(k => viteKeys.add(k));
+[...viteKeys].forEach(key => {
+  envDefines[`process.env.${key}`] = JSON.stringify(process.env[key] ?? "");
+});
 
 // Build all the HTML files
 const result = await build({

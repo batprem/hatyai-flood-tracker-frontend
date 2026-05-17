@@ -56,10 +56,6 @@ export function resolveMapStyle(): MapStyleResolution {
 }
 
 function readEnv(name: "VITE_MAPTILER_KEY"): string | undefined {
-  // Bun replaces literal `process.env.VITE_*` references at build/dev time.
-  // Use the static literal so the bundler can inline the value; fall back to
-  // an `undefined` lookup so the function still works under tooling that does
-  // not perform the substitution.
   const value = name === "VITE_MAPTILER_KEY" ? process.env.VITE_MAPTILER_KEY : undefined;
   if (typeof value === "string" && value.length > 0) {
     return value;
