@@ -34,11 +34,13 @@ const MAPTILER_ATTRIBUTION =
  * Build a MapLibre style + attribution pair using the configured tile provider.
  *
  * Reads `process.env.VITE_MAPTILER_KEY` at build/dev time (Bun inlines the
- * literal per `bunfig.toml`). If the key is missing, falls back to MapLibre
- * demotiles so the dashboard still renders during local development.
+ * literal per `bunfig.toml` and `build.ts`). If the key is missing or the
+ * runtime environment does not expose `process.env` (the browser case once the
+ * literal has been inlined to `undefined`), falls back to MapLibre demotiles so
+ * the dashboard still renders without an account.
  */
 export function resolveMapStyle(): MapStyleResolution {
-  const maptilerKey = readEnv("VITE_MAPTILER_KEY");
+  const maptilerKey = readMaptilerKey();
   if (maptilerKey) {
     return {
       style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(
@@ -55,8 +57,20 @@ export function resolveMapStyle(): MapStyleResolution {
   };
 }
 
-function readEnv(name: "VITE_MAPTILER_KEY"): string | undefined {
-  const value = name === "VITE_MAPTILER_KEY" ? process.env.VITE_MAPTILER_KEY : undefined;
+function readMaptilerKey(): string | undefined {
+  // Bun replaces the LITERAL `process.env.VITE_MAPTILER_KEY` reference at
+  // build/dev time (allow-listed via `bunfig.toml` and `build.ts`'s `define`
+  // map). The substitution must be on the literal expression for the bundler
+  // to catch it, so we read it directly here and rely on `build.ts` mapping
+  // unset vars to the literal `undefined` (HFT-17). We still guard with
+  // `typeof` so a runtime where `process` exists but the var is missing — or
+  // where Bun did not perform substitution — does not throw.
+  let value: string | undefined;
+  try {
+    value = process.env.VITE_MAPTILER_KEY;
+  } catch {
+    value = undefined;
+  }
   if (typeof value === "string" && value.length > 0) {
     return value;
   }

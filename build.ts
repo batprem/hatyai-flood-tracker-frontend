@@ -144,18 +144,38 @@ console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 
 // browser bundle. The dev server inlines these via `bunfig.toml`'s `env` glob,
 // but the standalone bundler needs explicit `define` entries.
 //
-// Known VITE_* vars are always included with an empty-string fallback so that
-// no unresolved `process.env.*` reference survives into the browser bundle
-// (which would throw ReferenceError since `process` is not a browser global).
-const KNOWN_VITE_VARS = ["VITE_API_URL", "VITE_MAPTILER_KEY"] as const;
+// IMPORTANT: every `VITE_*` env var read by browser code MUST appear here so
+// the literal `process.env.VITE_X` reference is replaced even when the var is
+// unset. Otherwise the un-substituted reference reaches the browser, where
+// `process` is not defined, and the whole React tree crashes at boot
+// (see HFT-17 regression). For unset vars we substitute the literal string
+// `"undefined"` so the inlined expression evaluates to `undefined` at runtime.
+const KNOWN_BROWSER_ENV_VARS: ReadonlyArray<string> = [
+  "VITE_API_URL",
+  "VITE_MAPTILER_KEY",
+];
+
 const envDefines: Record<string, string> = {
   "process.env.NODE_ENV": JSON.stringify("production"),
 };
-const viteKeys = new Set<string>(KNOWN_VITE_VARS);
-Object.keys(process.env).filter(k => k.startsWith("VITE_")).forEach(k => viteKeys.add(k));
-[...viteKeys].forEach(key => {
-  envDefines[`process.env.${key}`] = JSON.stringify(process.env[key] ?? "");
-});
+for (const key of KNOWN_BROWSER_ENV_VARS) {
+  const value = process.env[key];
+  envDefines[`process.env.${key}`] =
+    typeof value === "string" ? JSON.stringify(value) : "undefined";
+}
+// Also inline any additional VITE_* vars present in the build environment so
+// teams can add new ones without immediately editing this file. Vars added
+// here without being added to `KNOWN_BROWSER_ENV_VARS` still risk the
+// unset-var crash, so prefer the allow-list above.
+for (const [key, value] of Object.entries(process.env)) {
+  if (
+    key.startsWith("VITE_") &&
+    typeof value === "string" &&
+    !(`process.env.${key}` in envDefines)
+  ) {
+    envDefines[`process.env.${key}`] = JSON.stringify(value);
+  }
+}
 
 // Build all the HTML files
 const result = await build({

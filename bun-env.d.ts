@@ -22,12 +22,17 @@ declare module "*.module.css" {
  * The Bun bundler replaces literal `process.env.<NAME>` references with their
  * runtime values when the variable name is allow-listed in `bunfig.toml`
  * (`[serve.static].env`) for dev and via `define` in `build.ts` for production.
+ * Unset vars are substituted with the literal `undefined` so browser code does
+ * not see an unresolved `process.env.X` reference (HFT-17).
  *
- * `VITE_API_URL` is the project-wide convention for the backend base URL.
+ * - `VITE_API_URL` is the project-wide convention for the backend base URL.
+ * - `VITE_MAPTILER_KEY` opts into MapTiler streets tiles; when unset the
+ *   dashboard falls back to the public MapLibre demotiles basemap.
  */
 declare namespace NodeJS {
   interface ProcessEnv {
     readonly VITE_API_URL?: string;
+    readonly VITE_MAPTILER_KEY?: string;
     readonly NODE_ENV?: "development" | "production" | "test";
   }
 }
