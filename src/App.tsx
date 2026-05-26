@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { HistoricalEventList } from "@/components/HistoricalEventList";
 import {
   AlertTriangle,
   Clock3,
@@ -318,6 +319,19 @@ export function App() {
   const [activeLayer, setActiveLayer] = useState<MapLayer>("rain");
   const [forecastIndex, setForecastIndex] = useState(1);
   const [selectedStationId, setSelectedStationId] = useState(stations[1].id);
+  const [page, setPage] = useState<"dashboard" | "history">(() =>
+    window.location.pathname === "/history" ? "history" : "dashboard",
+  );
+
+  const navigateToHistory = () => {
+    window.history.pushState({}, "", "/history");
+    setPage("history");
+  };
+
+  const navigateToDashboard = () => {
+    window.history.pushState({}, "", "/");
+    setPage("dashboard");
+  };
 
   const t = copy[language];
   const currentForecast = forecast[forecastIndex];
@@ -355,6 +369,20 @@ export function App() {
       })),
     [],
   );
+
+  if (page === "history") {
+    return (
+      <main className="min-h-screen overflow-hidden bg-slate-950 text-slate-50">
+        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.24),_transparent_30%),radial-gradient(circle_at_80%_10%,_rgba(45,212,191,0.2),_transparent_26%),linear-gradient(180deg,_#07111f_0%,_#0f172a_100%)]" />
+        <div className="relative mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+          <HistoricalEventList
+            language={language}
+            onNavigateDashboard={navigateToDashboard}
+          />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -730,6 +758,19 @@ export function App() {
             </Card>
           </aside>
         </section>
+
+        {/* HFT-57 — footer link to historical events */}
+        <footer className="pb-4 text-center">
+          <button
+            type="button"
+            className="text-xs text-slate-400 hover:text-cyan-300 transition-colors"
+            onClick={navigateToHistory}
+          >
+            {language === "th"
+              ? "เหตุการณ์น้ำท่วมย้อนหลัง"
+              : "Historical flood events"}
+          </button>
+        </footer>
       </div>
     </main>
   );
