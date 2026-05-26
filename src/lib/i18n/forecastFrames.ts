@@ -78,6 +78,18 @@ export interface ForecastFramesCopy {
   primaryStaleBanner: string;
   /** Page-level banner body shown when only stale forecast data is available. */
   primaryStaleBannerDetail: string;
+  /** Call to action on the alert opt-in button when not yet subscribed. */
+  alertSubscribe: string;
+  /** Button label while a subscribe/unsubscribe request is in flight. */
+  alertWorking: string;
+  /** Label shown when push alerts are active. */
+  alertSubscribed: string;
+  /** Small link to turn alerts off. */
+  alertUnsubscribe: string;
+  /** Short error shown if subscribing fails (kept non-alarming). */
+  alertError: string;
+  /** Accessible label describing what the alert button does. */
+  alertAriaLabel: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -139,6 +151,12 @@ const TH: ForecastFramesCopy = {
   primaryStaleBanner: "กำลังแสดงข้อมูลพยากรณ์ล่าสุดที่ดึงได้ ซึ่งอาจไม่เป็นปัจจุบัน",
   primaryStaleBannerDetail:
     "ระบบยังไม่สามารถอัปเดตข้อมูลล่าสุดได้ โปรดตรวจสอบประกาศจากหน่วยงานทางการก่อนตัดสินใจ",
+  alertSubscribe: "รับการแจ้งเตือน",
+  alertWorking: "กำลังดำเนินการ...",
+  alertSubscribed: "เปิดการแจ้งเตือนแล้ว",
+  alertUnsubscribe: "ปิดการแจ้งเตือน",
+  alertError: "เปิดการแจ้งเตือนไม่สำเร็จ ลองใหม่อีกครั้ง",
+  alertAriaLabel: "รับการแจ้งเตือนน้ำท่วมผ่านการแจ้งเตือนบนอุปกรณ์",
 };
 
 const EN: ForecastFramesCopy = {
@@ -200,6 +218,12 @@ const EN: ForecastFramesCopy = {
   primaryStaleBanner: "Showing the last retrieved forecast, which may be out of date",
   primaryStaleBannerDetail:
     "The system could not refresh to the latest data. Check official sources before acting on it.",
+  alertSubscribe: "Get flood alerts",
+  alertWorking: "Working...",
+  alertSubscribed: "Alerts on",
+  alertUnsubscribe: "Turn off",
+  alertError: "Could not enable alerts. Please try again.",
+  alertAriaLabel: "Get flood alerts as device notifications",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Hat Yai Flood Watch">
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <path d="M32 12c0 0 14 14 14 24a14 14 0 0 1-28 0c0-10 14-24 14-24z" fill="#0ea5e9"/>
+  <path d="M14 44c3 0 3 3 6 3s3-3 6-3 3 3 6 3 3-3 6-3 3 3 6 3 3-3 6-3v8c-3 0-3 3-6 3s-3-3-6-3-3 3-6 3-3-3-6-3-3 3-6 3-3-3-6-3z" fill="#38bdf8" opacity="0.85"/>
+</svg>

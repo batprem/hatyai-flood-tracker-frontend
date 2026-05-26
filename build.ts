@@ -2,7 +2,7 @@
 import { build, type BuildConfig } from "bun";
 import plugin from "bun-plugin-tailwind";
 import { existsSync } from "fs";
-import { rm } from "fs/promises";
+import { cp, rm } from "fs/promises";
 import path from "path";
 
 // Print help text if requested
@@ -188,6 +188,18 @@ const result = await build({
   define: envDefines,
   ...cliConfig, // Merge in any CLI-provided options
 });
+
+// Copy static `public/` assets into the build output verbatim. These are
+// files that must keep a fixed, unhashed URL at the site root — most
+// importantly the push service worker (`sw.js`), which has to live at `/sw.js`
+// to control the whole origin, plus its notification icon. The HTML bundler
+// above only emits files reachable from an HTML entrypoint, so anything that
+// is fetched by stable path at runtime belongs here instead.
+const publicDir = path.join(process.cwd(), "public");
+if (existsSync(publicDir)) {
+  await cp(publicDir, outdir, { recursive: true });
+  console.log(`📦 Copied static assets from ${publicDir} into ${outdir}`);
+}
 
 // Print the results
 const end = performance.now();

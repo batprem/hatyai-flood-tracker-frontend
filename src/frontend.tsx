@@ -8,6 +8,13 @@
 import { createRoot } from "react-dom/client";
 import { StrictMode } from "react";
 import { App } from "./App";
+import { registerServiceWorker } from "./lib/push/registerServiceWorker";
+
+// Register the push service worker (HFT-50). This is fire-and-forget and never
+// rejects to the caller — a registration failure must not block the public
+// alert UI from booting. The alert opt-in button (HFT-51) re-reads the
+// registration when the user chooses to subscribe.
+registerServiceWorker();
 
 const elem = document.getElementById("root")!;
 const app = (
