@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { HistoricalEventList } from "@/components/HistoricalEventList";
 import {
   AlertTriangle,
@@ -32,6 +32,11 @@ import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfall
 import type { MapStation } from "@/components/map/stationsSource";
 import type { RiskOverlayZone } from "@/components/map/riskSource";
 import type { ForecastFreshness } from "@/lib/api/forecastFrames";
+import {
+  fetchCurrentRisk,
+  type CurrentRiskResponse,
+  type ProviderResult,
+} from "@/lib/api/risk";
 import type { ForecastFramesPhase } from "@/lib/hooks/useForecastFrames";
 import {
   FORECAST_FRAMES_COPY,
@@ -334,6 +339,21 @@ export function App() {
     setPage("dashboard");
   };
 
+  const [riskData, setRiskData] = useState<CurrentRiskResponse | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCurrentRisk(controller.signal)
+      .then((data) => setRiskData(data))
+      .catch(() => {
+        // Silently swallow: the chip simply won't render on error or abort.
+        // The primary risk display is unaffected.
+      });
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
   const t = copy[language];
   const currentForecast = forecast[forecastIndex];
   const currentRisk = currentForecast.level;
@@ -524,6 +544,8 @@ export function App() {
                 language={language}
                 mapCopy={mapCopy}
               />
+
+              <ProviderEnsembleChip riskData={riskData} mapCopy={mapCopy} />
             </CardContent>
           </Card>
 
@@ -1026,6 +1048,92 @@ function StationObservationRow({
           {mapCopy.stationStaleChip}
         </span>
       )}
+    </div>
+  );
+}
+
+/** Determine the chip variant from the risk API response. */
+type EnsembleVariant = "agree" | "differ" | "single";
+
+function resolveEnsembleVariant(
+  riskData: CurrentRiskResponse,
+): EnsembleVariant | null {
+  const freshProviders: ProviderResult[] = riskData.providers.filter(
+    (p) => p.freshness_status === "fresh" || p.freshness_status === "delayed",
+  );
+
+  if (freshProviders.length === 0) {
+    return null;
+  }
+
+  if (riskData.single_provider_warning) {
+    return "single";
+  }
+
+  if (freshProviders.length >= 2) {
+    const firstLevel = freshProviders[0].computed_risk_level;
+    const allAgree = freshProviders.every((p) => p.computed_risk_level === firstLevel);
+    return allAgree ? "agree" : "differ";
+  }
+
+  return "single";
+}
+
+/**
+ * Small informational chip displayed below the risk card data-state row.
+ * Shows model count and agreement status from the risk ensemble response.
+ * Renders nothing when no providers are available or data has not loaded yet.
+ */
+function ProviderEnsembleChip({
+  riskData,
+  mapCopy,
+}: {
+  riskData: CurrentRiskResponse | null;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  if (riskData === null) {
+    return null;
+  }
+
+  const variant = resolveEnsembleVariant(riskData);
+  if (variant === null) {
+    return null;
+  }
+
+  const labelMap: Record<EnsembleVariant, string> = {
+    agree: mapCopy.ensembleBothAgree,
+    differ: mapCopy.ensembleBothDiffer,
+    single: mapCopy.ensembleSingleProvider,
+  };
+
+  const classMap: Record<EnsembleVariant, string> = {
+    agree: "border-slate-200 bg-slate-50 text-slate-600",
+    differ: "border-slate-200 bg-slate-50 text-slate-600",
+    single: "border-amber-300 bg-amber-50 text-amber-800",
+  };
+
+  const dotClassMap: Record<EnsembleVariant, string> = {
+    agree: "bg-slate-400",
+    differ: "bg-slate-400",
+    single: "bg-amber-500",
+  };
+
+  return (
+    <div className="flex">
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+          classMap[variant],
+        )}
+        role="status"
+        aria-label={labelMap[variant]}
+      >
+        <span
+          className={cn("size-1.5 rounded-full", dotClassMap[variant])}
+          aria-hidden
+        />
+        {labelMap[variant]}
+      </span>
     </div>
   );
 }
