@@ -90,6 +90,12 @@ export interface ForecastFramesCopy {
   alertError: string;
   /** Accessible label describing what the alert button does. */
   alertAriaLabel: string;
+  /** Ensemble chip: both providers fresh and agree on the same risk level. */
+  ensembleBothAgree: string;
+  /** Ensemble chip: both providers fresh but report different risk levels (UI shows the highest). */
+  ensembleBothDiffer: string;
+  /** Ensemble chip: only one provider had fresh data. */
+  ensembleSingleProvider: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -157,6 +163,9 @@ const TH: ForecastFramesCopy = {
   alertUnsubscribe: "ปิดการแจ้งเตือน",
   alertError: "เปิดการแจ้งเตือนไม่สำเร็จ ลองใหม่อีกครั้ง",
   alertAriaLabel: "รับการแจ้งเตือนน้ำท่วมผ่านการแจ้งเตือนบนอุปกรณ์",
+  ensembleBothAgree: "2 โมเดลสอดคล้อง",
+  ensembleBothDiffer: "2 โมเดล (แสดงระดับสูงสุด)",
+  ensembleSingleProvider: "1 โมเดลเท่านั้น",
 };
 
 const EN: ForecastFramesCopy = {
@@ -224,6 +233,9 @@ const EN: ForecastFramesCopy = {
   alertUnsubscribe: "Turn off",
   alertError: "Could not enable alerts. Please try again.",
   alertAriaLabel: "Get flood alerts as device notifications",
+  ensembleBothAgree: "2 models agree",
+  ensembleBothDiffer: "2 models (highest shown)",
+  ensembleSingleProvider: "1 model only",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {
