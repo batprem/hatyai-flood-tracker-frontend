@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AlertSubscriptionButton } from "@/components/AlertSubscriptionButton";
 import { BasinMap, type BasinMapLayer } from "@/components/BasinMap";
 import { MapErrorBoundary } from "@/components/MapErrorBoundary";
 import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
@@ -409,6 +410,7 @@ export function App() {
                 />
                 {t.refresh as string}
               </Button>
+              <AlertSubscriptionButton language={language} copy={mapCopy} />
             </div>
           </div>
         </header>
