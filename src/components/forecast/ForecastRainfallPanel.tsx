@@ -47,6 +47,10 @@ export interface RainfallForecastSlots {
   freshness: ForecastFreshness | null;
   /** Current UI lifecycle phase. */
   phase: ForecastFramesPhase;
+  /** Whether a request is currently in flight (for spinners/disabled state). */
+  isFetching: boolean;
+  /** Trigger an explicit refetch (e.g. header refresh or banner retry). */
+  refresh: () => void;
 }
 
 /**
@@ -122,7 +126,17 @@ export function useRainfallForecastSlots({
 
   const legend = <ForecastRainfallLegend copy={copy} />;
 
-  return { overlay, sidebar, legend, frames, visibleFrame, freshness, phase };
+  return {
+    overlay,
+    sidebar,
+    legend,
+    frames,
+    visibleFrame,
+    freshness,
+    phase,
+    isFetching,
+    refresh,
+  };
 }
 
 interface ForecastOverlayProps {

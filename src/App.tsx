@@ -206,8 +206,8 @@ const forecast: ForecastStep[] = [
  *
  * These are fixed offsets from the page-load time so the stale indicator
  * behaves consistently without polling. Khlong Wa and U-Tapao Bridge have
- * recent readings; Songkhla Lake Outlet is intentionally set to >2 hours
- * ago to demonstrate the stale indicator.
+ * recent readings; Songkhla Lake Outlet is intentionally set older than
+ * `STATION_MAX_AGE_HOURS` to demonstrate the stale indicator.
  *
  * Replace these with `observedAt` values from the station API when live.
  */
@@ -243,7 +243,7 @@ const stations: Station[] = [
     trend: "stable",
     risk: "yellow",
     coordinates: [100.62, 7.18],
-    observedAt: minutesAgo(145),
+    observedAt: minutesAgo(7 * 60 + 25),
   },
 ];
 
@@ -398,13 +398,27 @@ export function App() {
                 type="button"
                 variant="secondary"
                 className="rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20"
+                onClick={() => rainfallForecast.refresh()}
+                disabled={rainfallForecast.isFetching}
               >
-                <RefreshCw className="size-4" />
+                <RefreshCw
+                  className={cn(
+                    "size-4",
+                    rainfallForecast.isFetching && "animate-spin",
+                  )}
+                />
                 {t.refresh as string}
               </Button>
             </div>
           </div>
         </header>
+
+        <PrimaryDataBanner
+          phase={rainfallForecast.phase}
+          isFetching={rainfallForecast.isFetching}
+          onRetry={() => rainfallForecast.refresh()}
+          mapCopy={mapCopy}
+        />
 
         <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
           <Card className="overflow-hidden border-0 bg-white text-slate-950 shadow-xl">
@@ -765,10 +779,15 @@ function DataState({ icon, label }: { icon: ReactNode; label: string }) {
 }
 
 /**
- * The stale threshold for station observations.
- * Readings older than this are flagged with a stale indicator.
+ * Maximum acceptable age (hours) for a station observation before the UI flags
+ * it stale. Mirrors the backend `risk_water_station_max_age_hours` setting.
+ *
+ * Stations are still mock in this build (HFT-25 station endpoint not landed),
+ * so the value is a typed default rather than a live config read. When the
+ * station API ships, source this from that response and drop the constant.
  */
-const STATION_STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+const STATION_MAX_AGE_HOURS = 6;
+const STATION_STALE_THRESHOLD_MS = STATION_MAX_AGE_HOURS * 60 * 60 * 1000;
 
 /**
  * Replaces the hard-coded DataState row in the risk card with live forecast
@@ -846,6 +865,93 @@ function ForecastDataStateRow({
 }
 
 /**
+ * Page-level public-safety banner for the primary forecast feed.
+ *
+ * Renders an unmissable bilingual banner directly under the header when the
+ * live forecast is in `error` (with a retry button) or `stale` (last good data
+ * still shown elsewhere on the page). It is deliberately load-bearing: a failed
+ * or stale feed must never let the page imply an all-clear, so the banner sits
+ * above the fold rather than only inside the forecast aside. Renders nothing
+ * for healthy/loading/idle phases.
+ */
+function PrimaryDataBanner({
+  phase,
+  isFetching,
+  onRetry,
+  mapCopy,
+}: {
+  phase: ForecastFramesPhase;
+  isFetching: boolean;
+  onRetry: () => void;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  if (phase === "error") {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-3xl border border-red-300/70 bg-red-50 p-4 text-red-900 shadow-lg sm:flex-row sm:items-center sm:justify-between"
+        role="alert"
+      >
+        <div className="flex items-start gap-3">
+          <WifiOff className="mt-0.5 size-5 shrink-0 text-red-600" aria-hidden />
+          <div>
+            <p className="text-sm font-black">{mapCopy.primaryErrorBanner}</p>
+            <p className="mt-0.5 text-sm">{mapCopy.primaryErrorBannerDetail}</p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          onClick={onRetry}
+          disabled={isFetching}
+          className="shrink-0 self-start rounded-full bg-red-600 text-white hover:bg-red-500 sm:self-center"
+        >
+          <RefreshCw
+            className={cn("size-4", isFetching && "animate-spin")}
+            aria-hidden
+          />
+          {mapCopy.errorRetry}
+        </Button>
+      </div>
+    );
+  }
+
+  if (phase === "stale") {
+    return (
+      <div
+        className="flex flex-col gap-3 rounded-3xl border border-orange-300/70 bg-orange-50 p-4 text-orange-900 shadow-lg sm:flex-row sm:items-center sm:justify-between"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle
+            className="mt-0.5 size-5 shrink-0 text-orange-600"
+            aria-hidden
+          />
+          <div>
+            <p className="text-sm font-black">{mapCopy.primaryStaleBanner}</p>
+            <p className="mt-0.5 text-sm">{mapCopy.primaryStaleBannerDetail}</p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onRetry}
+          disabled={isFetching}
+          className="shrink-0 self-start rounded-full border border-orange-300 bg-white text-orange-900 hover:bg-orange-100 sm:self-center"
+        >
+          <RefreshCw
+            className={cn("size-4", isFetching && "animate-spin")}
+            aria-hidden
+          />
+          {mapCopy.errorRetry}
+        </Button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/**
  * Shows the station's last observation timestamp and a stale chip when the
  * reading is older than STATION_STALE_THRESHOLD_MS.
  */
@@ -870,7 +976,7 @@ function StationObservationRow({
       {isStale && (
         <span
           className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-800"
-          title={mapCopy.stationStaleDetail}
+          title={mapCopy.stationStaleDetail(STATION_MAX_AGE_HOURS)}
           role="status"
         >
           <span className="size-1.5 rounded-full bg-orange-500" aria-hidden />

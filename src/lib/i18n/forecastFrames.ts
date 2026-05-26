@@ -62,14 +62,22 @@ export interface ForecastFramesCopy {
   stationObservedAt: string;
   /** Chip label when station data is older than the stale threshold. */
   stationStaleChip: string;
-  /** Tooltip explaining why the station reading is flagged stale. */
-  stationStaleDetail: string;
+  /** Tooltip explaining why the station reading is flagged stale (age-aware). */
+  stationStaleDetail: (maxAgeHours: number) => string;
   /** Forecast data freshness label shown in the risk card data-state row. */
   forecastFreshnessRow: (label: string) => string;
   /** Label for the data-source row in the risk card. */
   dataSource: string;
   /** Forecast API error shown in the risk card data-state row. */
   forecastErrorRow: string;
+  /** Page-level banner heading shown when the live forecast cannot load. */
+  primaryErrorBanner: string;
+  /** Page-level banner body shown when the live forecast cannot load. */
+  primaryErrorBannerDetail: string;
+  /** Page-level banner heading shown when only stale forecast data is available. */
+  primaryStaleBanner: string;
+  /** Page-level banner body shown when only stale forecast data is available. */
+  primaryStaleBannerDetail: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -120,10 +128,17 @@ const TH: ForecastFramesCopy = {
   mapErrorReload: "โหลดหน้าใหม่",
   stationObservedAt: "วัดเมื่อ",
   stationStaleChip: "ข้อมูลเก่า",
-  stationStaleDetail: "ข้อมูลสถานีนี้อาจล้าสมัย (เกิน 2 ชั่วโมง)",
+  stationStaleDetail: (maxAgeHours: number) =>
+    `ข้อมูลสถานีนี้อาจล้าสมัย (เกิน ${maxAgeHours} ชั่วโมง)`,
   forecastFreshnessRow: (label: string) => `สถานะพยากรณ์: ${label}`,
   dataSource: "แหล่งข้อมูล: GFS + ECMWF Open Data",
   forecastErrorRow: "พยากรณ์: ไม่สามารถโหลดได้",
+  primaryErrorBanner: "ขณะนี้ไม่สามารถเชื่อมต่อข้อมูลพยากรณ์ล่าสุดได้",
+  primaryErrorBannerDetail:
+    "นี่ไม่ใช่การยืนยันว่าปลอดภัย โปรดติดตามประกาศจากหน่วยงานทางการและลองโหลดข้อมูลใหม่อีกครั้ง",
+  primaryStaleBanner: "กำลังแสดงข้อมูลพยากรณ์ล่าสุดที่ดึงได้ ซึ่งอาจไม่เป็นปัจจุบัน",
+  primaryStaleBannerDetail:
+    "ระบบยังไม่สามารถอัปเดตข้อมูลล่าสุดได้ โปรดตรวจสอบประกาศจากหน่วยงานทางการก่อนตัดสินใจ",
 };
 
 const EN: ForecastFramesCopy = {
@@ -174,10 +189,17 @@ const EN: ForecastFramesCopy = {
   mapErrorReload: "Reload page",
   stationObservedAt: "Observed at",
   stationStaleChip: "Stale",
-  stationStaleDetail: "This station reading may be out of date (over 2 hours old).",
+  stationStaleDetail: (maxAgeHours: number) =>
+    `This station reading may be out of date (over ${maxAgeHours} hours old).`,
   forecastFreshnessRow: (label: string) => `Forecast status: ${label}`,
   dataSource: "Sources: GFS + ECMWF Open Data",
   forecastErrorRow: "Forecast: could not load",
+  primaryErrorBanner: "Live forecast data is unavailable right now",
+  primaryErrorBannerDetail:
+    "This is not an all-clear. Follow official notices and try reloading the forecast.",
+  primaryStaleBanner: "Showing the last retrieved forecast, which may be out of date",
+  primaryStaleBannerDetail:
+    "The system could not refresh to the latest data. Check official sources before acting on it.",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {
