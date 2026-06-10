@@ -54,6 +54,7 @@ import {
   buildRiskSource,
   type RiskOverlayZone,
 } from "@/components/map/riskSource";
+import { addBasinBoundaryLayer } from "@/components/map/basinBoundarySource";
 import type { ForecastFrame } from "@/lib/api/forecastFrames";
 import type {
   ForecastFramesCopy,
@@ -161,6 +162,7 @@ export function BasinMap(props: BasinMapProps) {
       map.addLayer(buildRainfallOutlineLayer(false));
       map.addLayer(buildStationsCircleLayer(false));
       map.addLayer(buildSelectedStationLayer(null));
+      addBasinBoundaryLayer(map);
 
       map.fitBounds(
         [
