@@ -273,17 +273,19 @@ export function BasinMap(props: BasinMapProps) {
   }, [state.ready, selectedStationId]);
 
   return (
-    <div
-      ref={containerRef}
-      role="region"
-      aria-label={copy.mapAriaLabel}
-      data-testid="basin-map"
-      data-tile-provider={styleResolution.provider}
-      data-rainfall-frame-count={rainfallFrames.length}
-      className="hft-basin-map relative h-full w-full"
-      style={{ touchAction: "pan-x pan-y" }}
-      lang={language}
-    />
+    <div className="absolute inset-0">
+      <div
+        ref={containerRef}
+        role="region"
+        aria-label={copy.mapAriaLabel}
+        data-testid="basin-map"
+        data-tile-provider={styleResolution.provider}
+        data-rainfall-frame-count={rainfallFrames.length}
+        className="hft-basin-map h-full w-full"
+        style={{ touchAction: "pan-x pan-y" }}
+        lang={language}
+      />
+    </div>
   );
 }
 
