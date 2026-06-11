@@ -55,6 +55,19 @@ import {
   type RiskOverlayZone,
 } from "@/components/map/riskSource";
 import { addBasinBoundaryLayer } from "@/components/map/basinBoundarySource";
+import {
+  SHELTERS_SOURCE_ID,
+  SHELTERS_MARKER_LAYER_ID,
+  SHELTERS_SYMBOL_LAYER_ID,
+  SHELTERS_LABEL_LAYER_ID,
+  buildSheltersSource,
+  buildSheltersMarkerLayer,
+  buildSheltersSymbolLayer,
+  buildSheltersLabelLayer,
+  buildShelterFeatureCollection,
+  type ShelterFeatureProperties,
+} from "@/components/map/sheltersSource";
+import type { Shelter } from "@/lib/api/shelters";
 import type { ForecastFrame } from "@/lib/api/forecastFrames";
 import type {
   ForecastFramesCopy,
@@ -75,11 +88,16 @@ export interface BasinMapProps {
   selectedRainfallFrame: ForecastFrame | null;
   stations: ReadonlyArray<MapStation>;
   riskOverlay: ReadonlyArray<RiskOverlayZone>;
+  /** Evacuation shelters to plot. Empty while loading or on fetch failure. */
+  shelters: ReadonlyArray<Shelter>;
+  /** Whether the persistent shelter overlay is currently shown. */
+  showShelters: boolean;
   activeLayer: BasinMapLayer;
   selectedStationId: string | null;
   language: Language;
   copy: ForecastFramesCopy;
   onSelectStation?: (stationId: string) => void;
+  onSelectShelter?: (shelterId: string) => void;
 }
 
 interface MapState {
@@ -99,11 +117,14 @@ export function BasinMap(props: BasinMapProps) {
     selectedRainfallFrame,
     stations,
     riskOverlay,
+    shelters,
+    showShelters,
     activeLayer,
     selectedStationId,
     language,
     copy,
     onSelectStation,
+    onSelectShelter,
   } = props;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -155,6 +176,7 @@ export function BasinMap(props: BasinMapProps) {
       map.addSource(RAINFALL_SOURCE_ID, buildRainfallSource(null));
       map.addSource(STATIONS_SOURCE_ID, buildStationsSource([]));
       map.addSource(RISK_SOURCE_ID, buildRiskSource([]));
+      map.addSource(SHELTERS_SOURCE_ID, buildSheltersSource([]));
 
       map.addLayer(buildRiskFillLayer(false));
       map.addLayer(buildRiskOutlineLayer(false));
@@ -163,6 +185,11 @@ export function BasinMap(props: BasinMapProps) {
       map.addLayer(buildStationsCircleLayer(false));
       map.addLayer(buildSelectedStationLayer(null));
       addBasinBoundaryLayer(map);
+      // Shelters draw on top of every data layer so evacuation points stay
+      // visible regardless of the active risk/station/rain tab.
+      map.addLayer(buildSheltersMarkerLayer(false));
+      map.addLayer(buildSheltersSymbolLayer(false));
+      map.addLayer(buildSheltersLabelLayer(false, language));
 
       map.fitBounds(
         [
@@ -212,6 +239,43 @@ export function BasinMap(props: BasinMapProps) {
     };
   }, [state.ready, onSelectStation]);
 
+  // ---- Wire shelter marker click -> onSelectShelter. -------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !state.ready) return;
+
+    const handleClick = (event: MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
+      const properties = feature.properties as
+        | ShelterFeatureProperties
+        | undefined;
+      if (!properties?.shelterId) return;
+      onSelectShelter?.(properties.shelterId);
+    };
+    const setCursorPointer = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const clearCursor = () => {
+      map.getCanvas().style.cursor = "";
+    };
+
+    // Bind to both the marker circle and the glyph so the whole pin is tappable.
+    const layers = [SHELTERS_MARKER_LAYER_ID, SHELTERS_SYMBOL_LAYER_ID];
+    for (const layerId of layers) {
+      map.on("click", layerId, handleClick);
+      map.on("mouseenter", layerId, setCursorPointer);
+      map.on("mouseleave", layerId, clearCursor);
+    }
+    return () => {
+      for (const layerId of layers) {
+        map.off("click", layerId, handleClick);
+        map.off("mouseenter", layerId, setCursorPointer);
+        map.off("mouseleave", layerId, clearCursor);
+      }
+    };
+  }, [state.ready, onSelectShelter]);
+
   // ---- Push rainfall data updates. -------------------------------------
   useEffect(() => {
     const map = mapRef.current;
@@ -239,6 +303,28 @@ export function BasinMap(props: BasinMapProps) {
     source.setData(buildRiskFeatureCollection(riskOverlay));
   }, [state.ready, riskOverlay]);
 
+  // ---- Push shelter data updates. --------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !state.ready) return;
+    const source = map.getSource(SHELTERS_SOURCE_ID) as
+      | GeoJSONSource
+      | undefined;
+    if (!source) return;
+    source.setData(buildShelterFeatureCollection(shelters));
+  }, [state.ready, shelters]);
+
+  // ---- Swap shelter label language when the UI language changes. --------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !state.ready) return;
+    if (!map.getLayer(SHELTERS_LABEL_LAYER_ID)) return;
+    map.setLayoutProperty(SHELTERS_LABEL_LAYER_ID, "text-field", [
+      "get",
+      language === "th" ? "nameTh" : "nameEn",
+    ]);
+  }, [state.ready, language]);
+
   // ---- Toggle layer visibility based on the active tab. ----------------
   useEffect(() => {
     const map = mapRef.current;
@@ -251,13 +337,19 @@ export function BasinMap(props: BasinMapProps) {
         activeLayer === "stations" ? "visible" : "none",
       [RISK_FILL_LAYER_ID]: activeLayer === "risk" ? "visible" : "none",
       [RISK_OUTLINE_LAYER_ID]: activeLayer === "risk" ? "visible" : "none",
+      // Shelters are a persistent, independently-toggled overlay (not part of
+      // the mutually-exclusive activeLayer tabs) so they stay visible across
+      // risk/rain/stations views when the user enables them.
+      [SHELTERS_MARKER_LAYER_ID]: showShelters ? "visible" : "none",
+      [SHELTERS_SYMBOL_LAYER_ID]: showShelters ? "visible" : "none",
+      [SHELTERS_LABEL_LAYER_ID]: showShelters ? "visible" : "none",
     };
     for (const [layerId, vis] of Object.entries(visibility)) {
       if (map.getLayer(layerId)) {
         map.setLayoutProperty(layerId, "visibility", vis);
       }
     }
-  }, [state.ready, activeLayer]);
+  }, [state.ready, activeLayer, showShelters]);
 
   // ---- Update the selected-station highlight filter. -------------------
   useEffect(() => {

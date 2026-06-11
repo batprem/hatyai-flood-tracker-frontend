@@ -96,6 +96,43 @@ export interface ForecastFramesCopy {
   ensembleBothDiffer: string;
   /** Ensemble chip: only one provider had fresh data. */
   ensembleSingleProvider: string;
+  // ---- Shelter overlay + nearest-shelter guidance (HFT-72) -------------
+  /** Label for the persistent shelter map toggle. */
+  shelterToggle: string;
+  /** Accessible description for the shelter toggle control. */
+  shelterToggleAria: string;
+  /** Heading for the nearest-shelter guidance card (orange/red only). */
+  nearestSheltersTitle: string;
+  /** Short subtitle under the nearest-shelter heading. */
+  nearestSheltersSubtitle: string;
+  /** Distance line when measured from the user's device location. */
+  distanceFromYou: (km: string) => string;
+  /** Distance line when measured from the city centre fallback. */
+  distanceFromCenter: (km: string) => string;
+  /** Note shown when geolocation is unavailable and the city centre is used. */
+  distanceCenterNote: string;
+  /** Loading copy while the shelter directory is being fetched. */
+  sheltersLoading: string;
+  /** Copy shown when the shelter directory is empty. */
+  sheltersEmpty: string;
+  /** Error copy when the shelter directory fails to load. */
+  sheltersError: string;
+  /** Capacity line for a shelter (people). */
+  shelterCapacity: (people: number) => string;
+  /** Shown when a shelter's capacity is not published. */
+  shelterCapacityUnknown: string;
+  /** Localized facility-type labels. */
+  shelterTypeLabels: {
+    school: string;
+    university: string;
+    temple: string;
+    community_center: string;
+    other: string;
+  };
+  /** Prefix before the dataset retrieved date in the shelter info line. */
+  shelterDatasetDate: (date: string) => string;
+  /** Accessible accuracy note disclosure label. */
+  shelterAccuracyNote: string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -166,6 +203,31 @@ const TH: ForecastFramesCopy = {
   ensembleBothAgree: "2 โมเดลสอดคล้อง",
   ensembleBothDiffer: "2 โมเดล (แสดงระดับสูงสุด)",
   ensembleSingleProvider: "1 โมเดลเท่านั้น",
+  shelterToggle: "ศูนย์พักพิง",
+  shelterToggleAria: "แสดงหรือซ่อนศูนย์พักพิงบนแผนที่",
+  nearestSheltersTitle: "ศูนย์พักพิงใกล้คุณ",
+  nearestSheltersSubtitle:
+    "จุดอพยพที่ใกล้ที่สุด เรียงตามระยะทาง เพื่อความปลอดภัยในภาวะเสี่ยงสูง",
+  distanceFromYou: (km: string) => `ห่างจากคุณประมาณ ${km} กม.`,
+  distanceFromCenter: (km: string) => `ห่างจากใจกลางเมืองประมาณ ${km} กม.`,
+  distanceCenterNote:
+    "ไม่ได้รับตำแหน่งอุปกรณ์ จึงวัดระยะจากใจกลางเมืองหาดใหญ่",
+  sheltersLoading: "กำลังโหลดข้อมูลศูนย์พักพิง...",
+  sheltersEmpty: "ยังไม่มีข้อมูลศูนย์พักพิงในขณะนี้",
+  sheltersError:
+    "ไม่สามารถโหลดข้อมูลศูนย์พักพิงได้ โปรดติดตามประกาศจากหน่วยงานทางการ",
+  shelterCapacity: (people: number) =>
+    `รองรับได้ประมาณ ${people.toLocaleString("th-TH")} คน`,
+  shelterCapacityUnknown: "ไม่ระบุความจุ",
+  shelterTypeLabels: {
+    school: "โรงเรียน",
+    university: "มหาวิทยาลัย",
+    temple: "วัด",
+    community_center: "ศูนย์ชุมชน",
+    other: "อื่น ๆ",
+  },
+  shelterDatasetDate: (date: string) => `ข้อมูลปรับปรุงเมื่อ ${date}`,
+  shelterAccuracyNote: "หมายเหตุความแม่นยำของพิกัด",
 };
 
 const EN: ForecastFramesCopy = {
@@ -236,6 +298,31 @@ const EN: ForecastFramesCopy = {
   ensembleBothAgree: "2 models agree",
   ensembleBothDiffer: "2 models (highest shown)",
   ensembleSingleProvider: "1 model only",
+  shelterToggle: "Shelters",
+  shelterToggleAria: "Show or hide evacuation shelters on the map",
+  nearestSheltersTitle: "Shelters near you",
+  nearestSheltersSubtitle:
+    "Closest evacuation points, sorted by distance, for use during high-risk conditions.",
+  distanceFromYou: (km: string) => `About ${km} km from you`,
+  distanceFromCenter: (km: string) => `About ${km} km from the city centre`,
+  distanceCenterNote:
+    "Device location unavailable — distances measured from central Hat Yai.",
+  sheltersLoading: "Loading shelter directory...",
+  sheltersEmpty: "No shelter information is available right now.",
+  sheltersError:
+    "Could not load the shelter directory. Follow official notices for evacuation points.",
+  shelterCapacity: (people: number) =>
+    `Holds roughly ${people.toLocaleString("en-GB")} people`,
+  shelterCapacityUnknown: "Capacity not published",
+  shelterTypeLabels: {
+    school: "School",
+    university: "University",
+    temple: "Temple",
+    community_center: "Community centre",
+    other: "Other",
+  },
+  shelterDatasetDate: (date: string) => `Data updated ${date}`,
+  shelterAccuracyNote: "Coordinate accuracy note",
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {

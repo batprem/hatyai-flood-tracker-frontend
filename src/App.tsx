@@ -6,9 +6,12 @@ import {
   CloudRain,
   Droplets,
   Gauge,
+  Home,
+  Info,
   Languages,
   Layers,
   MapPin,
+  Navigation,
   RadioTower,
   RefreshCw,
   ShieldCheck,
@@ -31,12 +34,21 @@ import { MapErrorBoundary } from "@/components/MapErrorBoundary";
 import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
 import type { MapStation } from "@/components/map/stationsSource";
 import type { RiskOverlayZone } from "@/components/map/riskSource";
+import { BASIN_CENTER } from "@/components/map/basinArea";
 import type { ForecastFreshness } from "@/lib/api/forecastFrames";
 import {
   fetchCurrentRisk,
   type CurrentRiskResponse,
   type ProviderResult,
 } from "@/lib/api/risk";
+import {
+  fetchShelters,
+  nearestShelters,
+  SheltersApiClientError,
+  type Shelter,
+  type ShelterType,
+  type ShelterWithDistance,
+} from "@/lib/api/shelters";
 import type { ForecastFramesPhase } from "@/lib/hooks/useForecastFrames";
 import {
   FORECAST_FRAMES_COPY,
@@ -320,6 +332,66 @@ function getStepLabel(step: ForecastStep, language: Language) {
   return step.hour;
 }
 
+/** Lifecycle phase for the shelter directory fetch. */
+type SheltersPhase = "loading" | "ready" | "empty" | "error";
+
+interface SheltersState {
+  phase: SheltersPhase;
+  shelters: ReadonlyArray<Shelter>;
+  retrievedDate: string | null;
+  accuracyNote: string | null;
+}
+
+/**
+ * Fetch the public shelter directory once on mount.
+ *
+ * Returns a small state machine so the UI can render distinct loading, empty,
+ * ready, and error states. The fetch is aborted on unmount. Errors never throw
+ * to the render tree — a failed shelter fetch must not blank the dashboard.
+ */
+function useShelters(): SheltersState {
+  const [state, setState] = useState<SheltersState>({
+    phase: "loading",
+    shelters: [],
+    retrievedDate: null,
+    accuracyNote: null,
+  });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchShelters(controller.signal)
+      .then((data) => {
+        setState({
+          phase: data.shelters.length === 0 ? "empty" : "ready",
+          shelters: data.shelters,
+          retrievedDate: data.provenance.retrieved_date,
+          accuracyNote: data.provenance.accuracy_note,
+        });
+      })
+      .catch((error: unknown) => {
+        // Swallow aborts (unmount); surface every other failure as an error
+        // state so the nearest-shelter card can warn rather than imply none.
+        if (
+          error instanceof SheltersApiClientError &&
+          error.detail.kind === "aborted"
+        ) {
+          return;
+        }
+        setState({
+          phase: "error",
+          shelters: [],
+          retrievedDate: null,
+          accuracyNote: null,
+        });
+      });
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  return state;
+}
+
 export function App() {
   const [language, setLanguage] = useState<Language>("th");
   const [activeLayer, setActiveLayer] = useState<MapLayer>("rain");
@@ -354,9 +426,47 @@ export function App() {
     };
   }, []);
 
+  // ---- Shelters (HFT-72) ----------------------------------------------
+  const sheltersState = useShelters();
+  const [showShelters, setShowShelters] = useState(false);
+  const [selectedShelterId, setSelectedShelterId] = useState<string | null>(
+    null,
+  );
+  // Device-geolocation origin as [lng, lat]; null until granted. Falls back to
+  // the basin centre with explicit copy when permission is denied/unavailable.
+  const [userOrigin, setUserOrigin] = useState<readonly [number, number] | null>(
+    null,
+  );
+
   const t = copy[language];
   const currentForecast = forecast[forecastIndex];
   const currentRisk = currentForecast.level;
+  // High-risk guidance (nearest shelters + geolocation prompt) is gated on the
+  // current risk level: shown only at orange/red, hidden at green/yellow.
+  const isHighRisk = currentRisk === "orange" || currentRisk === "red";
+
+  // Request geolocation only when high-risk guidance is about to show, so we do
+  // not prompt during calm conditions. Denial silently falls back to the city
+  // centre with explicit copy.
+  useEffect(() => {
+    if (!isHighRisk) return;
+    if (userOrigin) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        setUserOrigin([pos.coords.longitude, pos.coords.latitude]);
+      },
+      () => {
+        // Denied or unavailable: keep userOrigin null -> city-centre fallback.
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [isHighRisk, userOrigin]);
   const selectedStation = useMemo(
     () =>
       stations.find((station) => station.id === selectedStationId) ??
@@ -389,6 +499,24 @@ export function App() {
         nameTh: station.name.th,
       })),
     [],
+  );
+
+  // Origin for nearest-shelter ranking: device location when granted, else the
+  // basin/city centre. Drives both the distance copy and which copy variant we
+  // show (from-you vs from-centre).
+  const shelterOrigin: readonly [number, number] = userOrigin ?? BASIN_CENTER;
+  const usingDeviceLocation = userOrigin !== null;
+  const nearestShelterList = useMemo<ShelterWithDistance[]>(
+    () =>
+      sheltersState.shelters.length > 0
+        ? nearestShelters(sheltersState.shelters, shelterOrigin, 3)
+        : [],
+    [sheltersState.shelters, shelterOrigin[0], shelterOrigin[1]],
+  );
+  const selectedShelter = useMemo<Shelter | null>(
+    () =>
+      sheltersState.shelters.find((s) => s.id === selectedShelterId) ?? null,
+    [sheltersState.shelters, selectedShelterId],
   );
 
   if (page === "history") {
@@ -627,25 +755,46 @@ export function App() {
                     {t.mapSubtitle as string}
                   </p>
                 </div>
-                <div className="flex rounded-full bg-slate-100 p-1">
-                  {(["risk", "rain", "stations"] satisfies MapLayer[]).map(
-                    (layer) => (
-                      <button
-                        type="button"
-                        key={layer}
-                        onClick={() => setActiveLayer(layer)}
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-bold transition",
-                          activeLayer === layer
-                            ? "bg-slate-950 text-white shadow"
-                            : "text-slate-600 hover:bg-white"
-                        )}
-                      >
-                        <Layers className="size-3.5" />
-                        {t.layers[layer]}
-                      </button>
-                    )
-                  )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex rounded-full bg-slate-100 p-1">
+                    {(["risk", "rain", "stations"] satisfies MapLayer[]).map(
+                      (layer) => (
+                        <button
+                          type="button"
+                          key={layer}
+                          onClick={() => setActiveLayer(layer)}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-bold transition",
+                            activeLayer === layer
+                              ? "bg-slate-950 text-white shadow"
+                              : "text-slate-600 hover:bg-white"
+                          )}
+                        >
+                          <Layers className="size-3.5" />
+                          {t.layers[layer]}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {/* Shelters are a persistent overlay independent of the
+                      mutually-exclusive layer tabs, so they stay visible across
+                      risk/rain/stations. Disabled until the directory loads. */}
+                  <button
+                    type="button"
+                    onClick={() => setShowShelters((on) => !on)}
+                    disabled={sheltersState.phase !== "ready"}
+                    aria-pressed={showShelters}
+                    aria-label={mapCopy.shelterToggleAria}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+                      showShelters
+                        ? "border-indigo-900 bg-indigo-900 text-white shadow"
+                        : "border-indigo-200 bg-white text-indigo-900 hover:bg-indigo-50"
+                    )}
+                  >
+                    <Home className="size-3.5" />
+                    {mapCopy.shelterToggle}
+                  </button>
                 </div>
               </div>
             </CardHeader>
@@ -660,6 +809,8 @@ export function App() {
                     selectedRainfallFrame={rainfallForecast.visibleFrame}
                     stations={mapStations}
                     riskOverlay={riskOverlay}
+                    shelters={sheltersState.shelters}
+                    showShelters={showShelters}
                     activeLayer={activeLayer}
                     selectedStationId={selectedStationId}
                     language={language}
@@ -667,6 +818,10 @@ export function App() {
                     onSelectStation={(stationId) => {
                       setSelectedStationId(stationId);
                       setActiveLayer("stations");
+                    }}
+                    onSelectShelter={(shelterId) => {
+                      setSelectedShelterId(shelterId);
+                      setShowShelters(true);
                     }}
                   />
                 </MapErrorBoundary>
@@ -677,6 +832,59 @@ export function App() {
                     data-testid="forecast-rainfall-overlay"
                   >
                     {rainfallForecast.overlay}
+                  </div>
+                )}
+
+                {/* On-map shelter selection popup. Shown when a shelter marker
+                    (or a nearest-shelter row) is selected; dismissible. */}
+                {showShelters && selectedShelter && (
+                  <div
+                    className="absolute left-3 right-3 top-3 z-20 rounded-2xl border border-indigo-200 bg-white/95 p-3 shadow-xl backdrop-blur"
+                    data-testid="shelter-popup"
+                    role="dialog"
+                    aria-label={mapCopy.shelterToggle}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+                          <Home className="size-4 text-indigo-900" aria-hidden />
+                          {language === "th"
+                            ? selectedShelter.name_th
+                            : selectedShelter.name_en}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <ShelterTypeChip
+                            type={selectedShelter.type}
+                            mapCopy={mapCopy}
+                          />
+                          <span className="text-xs text-slate-600">
+                            {selectedShelter.capacity !== null
+                              ? mapCopy.shelterCapacity(selectedShelter.capacity)
+                              : mapCopy.shelterCapacityUnknown}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {selectedShelter.municipality_th}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedShelterId(null)}
+                        aria-label={language === "th" ? "ปิด" : "Close"}
+                        className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <span aria-hidden className="text-lg leading-none">
+                          ×
+                        </span>
+                      </button>
+                    </div>
+                    {sheltersState.retrievedDate && (
+                      <p className="mt-2 text-[10px] text-slate-400">
+                        {mapCopy.shelterDatasetDate(
+                          sheltersState.retrievedDate,
+                        )}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -708,6 +916,21 @@ export function App() {
           </Card>
 
           <aside className="grid gap-4">
+            <NearestSheltersCard
+              isHighRisk={isHighRisk}
+              phase={sheltersState.phase}
+              nearest={nearestShelterList}
+              usingDeviceLocation={usingDeviceLocation}
+              retrievedDate={sheltersState.retrievedDate}
+              accuracyNote={sheltersState.accuracyNote}
+              selectedShelterId={selectedShelterId}
+              onSelectShelter={(id) => {
+                setSelectedShelterId(id);
+                setShowShelters(true);
+              }}
+              language={language}
+              mapCopy={mapCopy}
+            />
             <Card className="border-0 bg-white text-slate-950 shadow-xl">
               <CardHeader>
                 <CardDescription className="font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -1135,6 +1358,181 @@ function ProviderEnsembleChip({
         {labelMap[variant]}
       </span>
     </div>
+  );
+}
+
+/**
+ * Format a kilometre distance for display: metres under 1 km, one decimal
+ * otherwise. Keeps the public copy readable rather than showing "0.3194 km".
+ */
+function formatDistance(km: number, language: Language): string {
+  if (km < 1) {
+    const m = Math.round(km * 1000);
+    return language === "th" ? `${m} ม.` : `${m} m`;
+  }
+  return km.toFixed(1);
+}
+
+/**
+ * Localized facility-type chip for a shelter.
+ */
+function ShelterTypeChip({
+  type,
+  mapCopy,
+}: {
+  type: ShelterType;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-900">
+      <Home className="size-3" aria-hidden />
+      {mapCopy.shelterTypeLabels[type]}
+    </span>
+  );
+}
+
+/**
+ * Nearest-shelter public-safety guidance.
+ *
+ * Renders only at orange/red risk (hidden entirely at green/yellow per the
+ * card). Surfaces loading, empty, and error states so a failed shelter fetch
+ * never reads as "no shelters". Distances come from device geolocation when
+ * granted, otherwise from the city centre with an explicit note. Dataset
+ * freshness and the coordinate accuracy note are shown accessibly.
+ */
+function NearestSheltersCard({
+  isHighRisk,
+  phase,
+  nearest,
+  usingDeviceLocation,
+  retrievedDate,
+  accuracyNote,
+  selectedShelterId,
+  onSelectShelter,
+  language,
+  mapCopy,
+}: {
+  isHighRisk: boolean;
+  phase: SheltersPhase;
+  nearest: ReadonlyArray<ShelterWithDistance>;
+  usingDeviceLocation: boolean;
+  retrievedDate: string | null;
+  accuracyNote: string | null;
+  selectedShelterId: string | null;
+  onSelectShelter: (shelterId: string) => void;
+  language: Language;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  // Hidden entirely outside high-risk conditions.
+  if (!isHighRisk) {
+    return null;
+  }
+
+  return (
+    <Card
+      className="border-0 bg-white text-slate-950 shadow-xl ring-2 ring-indigo-900/10"
+      data-testid="nearest-shelters-card"
+    >
+      <CardHeader className="pb-3">
+        <CardDescription className="flex items-center gap-2 font-semibold uppercase tracking-[0.2em] text-indigo-900">
+          <Navigation className="size-4" aria-hidden />
+          {mapCopy.nearestSheltersTitle}
+        </CardDescription>
+        <CardTitle className="sr-only">{mapCopy.nearestSheltersTitle}</CardTitle>
+        <p className="text-sm text-slate-600">{mapCopy.nearestSheltersSubtitle}</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {phase === "loading" && (
+          <p className="text-sm text-slate-500" role="status" aria-live="polite">
+            {mapCopy.sheltersLoading}
+          </p>
+        )}
+
+        {phase === "error" && (
+          <p
+            className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800"
+            role="alert"
+          >
+            {mapCopy.sheltersError}
+          </p>
+        )}
+
+        {phase === "empty" && (
+          <p className="text-sm text-slate-500" role="status">
+            {mapCopy.sheltersEmpty}
+          </p>
+        )}
+
+        {phase === "ready" && nearest.length > 0 && (
+          <>
+            {!usingDeviceLocation && (
+              <p className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+                <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {mapCopy.distanceCenterNote}
+              </p>
+            )}
+            <ul className="space-y-2">
+              {nearest.map(({ shelter, distanceKm }) => {
+                const isSelected = shelter.id === selectedShelterId;
+                const distanceText = formatDistance(distanceKm, language);
+                return (
+                  <li key={shelter.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectShelter(shelter.id)}
+                      className={cn(
+                        "w-full rounded-2xl border p-3 text-left transition",
+                        isSelected
+                          ? "border-indigo-900 bg-indigo-50"
+                          : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50",
+                      )}
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="font-bold leading-tight text-slate-900">
+                          {language === "th" ? shelter.name_th : shelter.name_en}
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-indigo-900 px-2 py-0.5 text-[11px] font-bold text-white">
+                          <Navigation className="size-3" aria-hidden />
+                          {usingDeviceLocation
+                            ? mapCopy.distanceFromYou(distanceText)
+                            : mapCopy.distanceFromCenter(distanceText)}
+                        </span>
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <ShelterTypeChip type={shelter.type} mapCopy={mapCopy} />
+                        <span className="text-xs text-slate-600">
+                          {shelter.capacity !== null
+                            ? mapCopy.shelterCapacity(shelter.capacity)
+                            : mapCopy.shelterCapacityUnknown}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {shelter.municipality_th}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Dataset freshness + coordinate accuracy note, accessible. */}
+            {retrievedDate && (
+              <p className="text-[11px] text-slate-500">
+                {mapCopy.shelterDatasetDate(retrievedDate)}
+              </p>
+            )}
+            {accuracyNote && (
+              <details className="text-[11px] text-slate-500">
+                <summary className="cursor-pointer font-semibold text-slate-600">
+                  {mapCopy.shelterAccuracyNote}
+                </summary>
+                <p className="mt-1 leading-snug">{accuracyNote}</p>
+              </details>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
