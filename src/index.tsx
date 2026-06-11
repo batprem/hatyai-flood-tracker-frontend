@@ -34,6 +34,14 @@ const server = serve({
     // Notification icon referenced by the service worker.
     "/logo.svg": () => servePublicFile("logo.svg", "image/svg+xml"),
 
+    // Static files under public/data/ (GeoJSON, etc.)
+    "/data/*": async (req) => {
+      const fileName = path.join("data", new URL(req.url).pathname.replace(/^\/data\//, ""));
+      const file = Bun.file(path.join(publicDir, fileName));
+      if (!(await file.exists())) return new Response("Not found", { status: 404 });
+      return new Response(file, { headers: { "Content-Type": "application/geo+json" } });
+    },
+
     // Serve index.html for all unmatched routes.
     "/*": index,
 
