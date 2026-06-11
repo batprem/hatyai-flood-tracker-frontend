@@ -133,6 +133,95 @@ export interface ForecastFramesCopy {
   shelterDatasetDate: (date: string) => string;
   /** Accessible accuracy note disclosure label. */
   shelterAccuracyNote: string;
+  // ---- Citizen flood reports (HFT-74) ----------------------------------
+  /** Header-stack button + dialog title: open the report-flooding flow. */
+  reportEntry: string;
+  /** Accessible label for the report-flooding entry button. */
+  reportEntryAria: string;
+  /** Dialog subtitle explaining what a report is for. */
+  reportSubtitle: string;
+  /** Label for the map-pick step. */
+  reportLocationLabel: string;
+  /** Hint under the map-pick: tap the map to move the pin. */
+  reportLocationHint: string;
+  /** Button: use my current device location for the pin. */
+  reportUseMyLocation: string;
+  /** Note shown when device location is unavailable and map centre is used. */
+  reportLocationCenterNote: string;
+  /** Label for the water-depth segmented control. */
+  reportDepthLabel: string;
+  /** Localized water-depth option labels. */
+  reportDepthLabels: {
+    ankle: string;
+    knee: string;
+    waist: string;
+    above_waist: string;
+  };
+  /** Label for the optional free-text note field. */
+  reportNoteLabel: string;
+  /** Placeholder text for the note field. */
+  reportNotePlaceholder: string;
+  /** Character counter, e.g. "120 / 500". */
+  reportNoteCounter: (used: number, max: number) => string;
+  /** Label for the optional photo input. */
+  reportPhotoLabel: string;
+  /** Privacy reassurance line shown above the submit button. */
+  reportPrivacy: string;
+  /** Submit button label. */
+  reportSubmit: string;
+  /** Submit button label while the request is in flight. */
+  reportSubmitting: string;
+  /** Cancel/close button label. */
+  reportCancel: string;
+  /** Success heading after a report is accepted (pending moderation). */
+  reportSuccessTitle: string;
+  /** Success body: submitted, awaiting review. */
+  reportSuccess: string;
+  /** Button to file another report after success. */
+  reportSubmitAnother: string;
+  /** Error: report location is outside the supported basin (HTTP 400). */
+  reportErrorOutsideBasin: string;
+  /** Error: the uploaded photo was rejected (HTTP 400). */
+  reportErrorInvalidPhoto: string;
+  /** Error: submitted fields failed validation (HTTP 422). */
+  reportErrorBadFields: string;
+  /** Error: rate limit reached, max 5 per hour per device (HTTP 429). */
+  reportErrorRateLimit: string;
+  /** Error: network failure submitting the report. */
+  reportErrorNetwork: string;
+  /** Generic submission error fallback. */
+  reportErrorGeneric: string;
+  /** Client-side guard shown when the picked pin is outside the basin bbox. */
+  reportPinOutsideBasin: string;
+  // ---- Reports map overlay --------------------------------------------
+  /** Label for the persistent reports map toggle. */
+  reportsToggle: string;
+  /** Accessible description for the reports toggle control. */
+  reportsToggleAria: string;
+  /** Popup heading for a selected report. */
+  reportPopupTitle: string;
+  /** Popup line prefixing the reported depth. */
+  reportPopupDepth: (depth: string) => string;
+  /** Relative-time line for when a report was filed (e.g. "2h ago"). */
+  reportPopupTime: (relative: string) => string;
+  /** Alt text for a report photo thumbnail. */
+  reportPhotoAlt: string;
+  /** Loading copy while approved reports are being fetched. */
+  reportsLoading: string;
+  /** Copy shown when there are no approved reports. */
+  reportsEmpty: string;
+  /** Error copy when the approved-reports feed fails to load. */
+  reportsError: string;
+  /** Legend title for the reports depth scale. */
+  reportsLegendTitle: string;
+  /** Relative-time formatter: "just now". */
+  relativeJustNow: string;
+  /** Relative-time formatter: minutes ago. */
+  relativeMinutesAgo: (minutes: number) => string;
+  /** Relative-time formatter: hours ago. */
+  relativeHoursAgo: (hours: number) => string;
+  /** Relative-time formatter: days ago. */
+  relativeDaysAgo: (days: number) => string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -228,6 +317,59 @@ const TH: ForecastFramesCopy = {
   },
   shelterDatasetDate: (date: string) => `ข้อมูลปรับปรุงเมื่อ ${date}`,
   shelterAccuracyNote: "หมายเหตุความแม่นยำของพิกัด",
+  reportEntry: "รายงานน้ำท่วม",
+  reportEntryAria: "รายงานสถานการณ์น้ำท่วมในพื้นที่ของคุณ",
+  reportSubtitle:
+    "ช่วยกันรายงานจุดที่น้ำท่วมเพื่อแจ้งเตือนเพื่อนบ้าน รายงานจะแสดงหลังผ่านการตรวจสอบ",
+  reportLocationLabel: "ตำแหน่งที่น้ำท่วม",
+  reportLocationHint: "แตะบนแผนที่เพื่อย้ายหมุดไปยังจุดที่น้ำท่วม",
+  reportUseMyLocation: "ใช้ตำแหน่งของฉัน",
+  reportLocationCenterNote:
+    "ไม่ได้รับตำแหน่งอุปกรณ์ เริ่มหมุดที่ใจกลางแผนที่ โปรดลากหมุดให้ตรงจุด",
+  reportDepthLabel: "ระดับความลึกของน้ำ",
+  reportDepthLabels: {
+    ankle: "ข้อเท้า",
+    knee: "เข่า",
+    waist: "เอว",
+    above_waist: "เหนือเอว",
+  },
+  reportNoteLabel: "รายละเอียดเพิ่มเติม (ไม่บังคับ)",
+  reportNotePlaceholder: "เช่น น้ำท่วมถนน รถเล็กผ่านไม่ได้",
+  reportNoteCounter: (used: number, max: number) => `${used} / ${max}`,
+  reportPhotoLabel: "แนบรูปภาพ (ไม่บังคับ)",
+  reportPrivacy:
+    "ระบบไม่เก็บข้อมูลส่วนบุคคล และจะลบข้อมูลตำแหน่งที่ฝังในรูปภาพโดยอัตโนมัติ",
+  reportSubmit: "ส่งรายงาน",
+  reportSubmitting: "กำลังส่ง...",
+  reportCancel: "ยกเลิก",
+  reportSuccessTitle: "ส่งรายงานแล้ว",
+  reportSuccess: "ส่งแล้ว รอการตรวจสอบ ขอบคุณที่ช่วยกันแจ้งเตือน",
+  reportSubmitAnother: "รายงานอีกจุด",
+  reportErrorOutsideBasin:
+    "ตำแหน่งนี้อยู่นอกพื้นที่ลุ่มน้ำที่รองรับ โปรดเลือกจุดภายในพื้นที่หาดใหญ่",
+  reportErrorInvalidPhoto:
+    "ไม่สามารถใช้รูปภาพนี้ได้ โปรดเลือกไฟล์รูปภาพอื่น",
+  reportErrorBadFields: "ข้อมูลไม่ครบหรือไม่ถูกต้อง โปรดตรวจสอบแล้วลองใหม่",
+  reportErrorRateLimit: "ส่งได้สูงสุด 5 ครั้งต่อชั่วโมง โปรดลองใหม่ภายหลัง",
+  reportErrorNetwork: "เครือข่ายขัดข้อง โปรดตรวจสอบการเชื่อมต่อแล้วลองใหม่",
+  reportErrorGeneric: "ส่งรายงานไม่สำเร็จ โปรดลองใหม่อีกครั้ง",
+  reportPinOutsideBasin:
+    "หมุดอยู่นอกพื้นที่ลุ่มน้ำที่รองรับ โปรดย้ายเข้ามาในพื้นที่",
+  reportsToggle: "รายงานประชาชน",
+  reportsToggleAria: "แสดงหรือซ่อนรายงานน้ำท่วมจากประชาชนบนแผนที่",
+  reportPopupTitle: "รายงานน้ำท่วมจากประชาชน",
+  reportPopupDepth: (depth: string) => `ระดับน้ำ: ${depth}`,
+  reportPopupTime: (relative: string) => `แจ้งเมื่อ ${relative}`,
+  reportPhotoAlt: "ภาพถ่ายสถานการณ์น้ำท่วมที่ประชาชนรายงาน",
+  reportsLoading: "กำลังโหลดรายงานจากประชาชน...",
+  reportsEmpty: "ยังไม่มีรายงานน้ำท่วมจากประชาชนที่ผ่านการตรวจสอบ",
+  reportsError:
+    "ไม่สามารถโหลดรายงานจากประชาชนได้ โปรดติดตามประกาศจากหน่วยงานทางการ",
+  reportsLegendTitle: "ระดับน้ำที่ประชาชนรายงาน",
+  relativeJustNow: "เมื่อสักครู่",
+  relativeMinutesAgo: (minutes: number) => `${minutes} นาทีที่แล้ว`,
+  relativeHoursAgo: (hours: number) => `${hours} ชั่วโมงที่แล้ว`,
+  relativeDaysAgo: (days: number) => `${days} วันที่แล้ว`,
 };
 
 const EN: ForecastFramesCopy = {
@@ -323,6 +465,63 @@ const EN: ForecastFramesCopy = {
   },
   shelterDatasetDate: (date: string) => `Data updated ${date}`,
   shelterAccuracyNote: "Coordinate accuracy note",
+  reportEntry: "Report flooding",
+  reportEntryAria: "Report flooding conditions in your area",
+  reportSubtitle:
+    "Help warn your neighbours by reporting where it is flooding. Reports appear after review.",
+  reportLocationLabel: "Flooded location",
+  reportLocationHint: "Tap the map to move the pin to the flooded spot.",
+  reportUseMyLocation: "Use my location",
+  reportLocationCenterNote:
+    "Device location unavailable — the pin starts at the map centre. Please drag it to the right spot.",
+  reportDepthLabel: "Water depth",
+  reportDepthLabels: {
+    ankle: "Ankle",
+    knee: "Knee",
+    waist: "Waist",
+    above_waist: "Above waist",
+  },
+  reportNoteLabel: "More detail (optional)",
+  reportNotePlaceholder: "e.g. road flooded, small cars cannot pass",
+  reportNoteCounter: (used: number, max: number) => `${used} / ${max}`,
+  reportPhotoLabel: "Attach a photo (optional)",
+  reportPrivacy:
+    "No personal data is collected, and any location metadata in your photo is removed automatically.",
+  reportSubmit: "Submit report",
+  reportSubmitting: "Submitting...",
+  reportCancel: "Cancel",
+  reportSuccessTitle: "Report submitted",
+  reportSuccess: "Submitted, awaiting review. Thank you for helping warn others.",
+  reportSubmitAnother: "Report another spot",
+  reportErrorOutsideBasin:
+    "That location is outside the supported basin. Please pick a point within the Hat Yai area.",
+  reportErrorInvalidPhoto:
+    "That photo could not be used. Please choose a different image file.",
+  reportErrorBadFields:
+    "Some fields are missing or invalid. Please check and try again.",
+  reportErrorRateLimit:
+    "You can submit up to 5 reports per hour. Please try again later.",
+  reportErrorNetwork: "Network error. Check your connection and retry.",
+  reportErrorGeneric: "Could not submit your report. Please try again.",
+  reportPinOutsideBasin:
+    "The pin is outside the supported basin. Please move it into the area.",
+  reportsToggle: "Citizen reports",
+  reportsToggleAria: "Show or hide citizen flood reports on the map",
+  reportPopupTitle: "Citizen flood report",
+  reportPopupDepth: (depth: string) => `Water depth: ${depth}`,
+  reportPopupTime: (relative: string) => `Reported ${relative}`,
+  reportPhotoAlt: "Citizen-submitted photo of flooding conditions",
+  reportsLoading: "Loading citizen reports...",
+  reportsEmpty: "No approved citizen flood reports yet.",
+  reportsError:
+    "Could not load citizen reports. Follow official notices for guidance.",
+  reportsLegendTitle: "Citizen-reported water depth",
+  relativeJustNow: "just now",
+  relativeMinutesAgo: (minutes: number) =>
+    `${minutes} minute${minutes === 1 ? "" : "s"} ago`,
+  relativeHoursAgo: (hours: number) =>
+    `${hours} hour${hours === 1 ? "" : "s"} ago`,
+  relativeDaysAgo: (days: number) => `${days} day${days === 1 ? "" : "s"} ago`,
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {
@@ -349,6 +548,34 @@ export function freshnessLabel(
     default:
       return copy.freshnessUnknown;
   }
+}
+
+/**
+ * Format an ISO timestamp as a short relative time using localized copy.
+ *
+ * Falls back to "just now" for anything under a minute (including small clock
+ * skew that would otherwise produce a negative value). Unparseable input
+ * returns an empty string so callers can skip rendering the line.
+ *
+ * @param isoTimestamp - ISO 8601 timestamp (e.g. report `created_at`).
+ * @param copy - Active-language copy bundle providing the relative formatters.
+ * @param now - Reference time in epoch ms. Defaults to `Date.now()`.
+ */
+export function formatRelativeTime(
+  isoTimestamp: string,
+  copy: ForecastFramesCopy,
+  now: number = Date.now(),
+): string {
+  const then = Date.parse(isoTimestamp);
+  if (Number.isNaN(then)) return "";
+  const diffMs = now - then;
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return copy.relativeJustNow;
+  if (minutes < 60) return copy.relativeMinutesAgo(minutes);
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return copy.relativeHoursAgo(hours);
+  const days = Math.floor(hours / 24);
+  return copy.relativeDaysAgo(days);
 }
 
 /** Format an absolute datetime in the user's chosen language. */
