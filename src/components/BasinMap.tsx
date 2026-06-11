@@ -67,7 +67,16 @@ import {
   buildShelterFeatureCollection,
   type ShelterFeatureProperties,
 } from "@/components/map/sheltersSource";
+import {
+  REPORTS_SOURCE_ID,
+  REPORTS_CIRCLE_LAYER_ID,
+  buildReportsSource,
+  buildReportsCircleLayer,
+  buildReportFeatureCollection,
+  type ReportFeatureProperties,
+} from "@/components/map/reportsSource";
 import type { Shelter } from "@/lib/api/shelters";
+import type { CitizenReport } from "@/lib/api/reports";
 import type { ForecastFrame } from "@/lib/api/forecastFrames";
 import type {
   ForecastFramesCopy,
@@ -92,12 +101,17 @@ export interface BasinMapProps {
   shelters: ReadonlyArray<Shelter>;
   /** Whether the persistent shelter overlay is currently shown. */
   showShelters: boolean;
+  /** Approved citizen reports to plot. Empty while loading or on fetch failure. */
+  reports: ReadonlyArray<CitizenReport>;
+  /** Whether the persistent citizen-reports overlay is currently shown. */
+  showReports: boolean;
   activeLayer: BasinMapLayer;
   selectedStationId: string | null;
   language: Language;
   copy: ForecastFramesCopy;
   onSelectStation?: (stationId: string) => void;
   onSelectShelter?: (shelterId: string) => void;
+  onSelectReport?: (reportId: string) => void;
 }
 
 interface MapState {
@@ -119,12 +133,15 @@ export function BasinMap(props: BasinMapProps) {
     riskOverlay,
     shelters,
     showShelters,
+    reports,
+    showReports,
     activeLayer,
     selectedStationId,
     language,
     copy,
     onSelectStation,
     onSelectShelter,
+    onSelectReport,
   } = props;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -177,6 +194,7 @@ export function BasinMap(props: BasinMapProps) {
       map.addSource(STATIONS_SOURCE_ID, buildStationsSource([]));
       map.addSource(RISK_SOURCE_ID, buildRiskSource([]));
       map.addSource(SHELTERS_SOURCE_ID, buildSheltersSource([]));
+      map.addSource(REPORTS_SOURCE_ID, buildReportsSource([]));
 
       map.addLayer(buildRiskFillLayer(false));
       map.addLayer(buildRiskOutlineLayer(false));
@@ -185,6 +203,10 @@ export function BasinMap(props: BasinMapProps) {
       map.addLayer(buildStationsCircleLayer(false));
       map.addLayer(buildSelectedStationLayer(null));
       addBasinBoundaryLayer(map);
+      // Citizen reports draw above the data layers but below shelters: a
+      // crowd-sourced observation is informational, while evacuation points are
+      // the highest-priority public-safety markers and must never be obscured.
+      map.addLayer(buildReportsCircleLayer(false));
       // Shelters draw on top of every data layer so evacuation points stay
       // visible regardless of the active risk/station/rain tab.
       map.addLayer(buildSheltersMarkerLayer(false));
@@ -276,6 +298,37 @@ export function BasinMap(props: BasinMapProps) {
     };
   }, [state.ready, onSelectShelter]);
 
+  // ---- Wire report circle click -> onSelectReport. ---------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !state.ready) return;
+
+    const handleClick = (event: MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
+      const properties = feature.properties as
+        | ReportFeatureProperties
+        | undefined;
+      if (!properties?.reportId) return;
+      onSelectReport?.(properties.reportId);
+    };
+    const setCursorPointer = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+    const clearCursor = () => {
+      map.getCanvas().style.cursor = "";
+    };
+
+    map.on("click", REPORTS_CIRCLE_LAYER_ID, handleClick);
+    map.on("mouseenter", REPORTS_CIRCLE_LAYER_ID, setCursorPointer);
+    map.on("mouseleave", REPORTS_CIRCLE_LAYER_ID, clearCursor);
+    return () => {
+      map.off("click", REPORTS_CIRCLE_LAYER_ID, handleClick);
+      map.off("mouseenter", REPORTS_CIRCLE_LAYER_ID, setCursorPointer);
+      map.off("mouseleave", REPORTS_CIRCLE_LAYER_ID, clearCursor);
+    };
+  }, [state.ready, onSelectReport]);
+
   // ---- Push rainfall data updates. -------------------------------------
   useEffect(() => {
     const map = mapRef.current;
@@ -314,6 +367,17 @@ export function BasinMap(props: BasinMapProps) {
     source.setData(buildShelterFeatureCollection(shelters));
   }, [state.ready, shelters]);
 
+  // ---- Push citizen-report data updates. -------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !state.ready) return;
+    const source = map.getSource(REPORTS_SOURCE_ID) as
+      | GeoJSONSource
+      | undefined;
+    if (!source) return;
+    source.setData(buildReportFeatureCollection(reports));
+  }, [state.ready, reports]);
+
   // ---- Swap shelter label language when the UI language changes. --------
   useEffect(() => {
     const map = mapRef.current;
@@ -343,13 +407,16 @@ export function BasinMap(props: BasinMapProps) {
       [SHELTERS_MARKER_LAYER_ID]: showShelters ? "visible" : "none",
       [SHELTERS_SYMBOL_LAYER_ID]: showShelters ? "visible" : "none",
       [SHELTERS_LABEL_LAYER_ID]: showShelters ? "visible" : "none",
+      // Citizen reports are a persistent, independently-toggled overlay, like
+      // shelters — not part of the mutually-exclusive activeLayer tabs.
+      [REPORTS_CIRCLE_LAYER_ID]: showReports ? "visible" : "none",
     };
     for (const [layerId, vis] of Object.entries(visibility)) {
       if (map.getLayer(layerId)) {
         map.setLayoutProperty(layerId, "visibility", vis);
       }
     }
-  }, [state.ready, activeLayer, showShelters]);
+  }, [state.ready, activeLayer, showShelters, showReports]);
 
   // ---- Update the selected-station highlight filter. -------------------
   useEffect(() => {

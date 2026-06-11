@@ -11,6 +11,7 @@ import {
   Languages,
   Layers,
   MapPin,
+  Megaphone,
   Navigation,
   RadioTower,
   RefreshCw,
@@ -30,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AlertSubscriptionButton } from "@/components/AlertSubscriptionButton";
 import { BasinMap, type BasinMapLayer } from "@/components/BasinMap";
+import { ReportFloodingDialog } from "@/components/ReportFloodingDialog";
 import { MapErrorBoundary } from "@/components/MapErrorBoundary";
 import { useRainfallForecastSlots } from "@/components/forecast/ForecastRainfallPanel";
 import type { MapStation } from "@/components/map/stationsSource";
@@ -49,10 +51,18 @@ import {
   type ShelterType,
   type ShelterWithDistance,
 } from "@/lib/api/shelters";
+import {
+  fetchApprovedReports,
+  resolveReportPhotoUrl,
+  ReportsApiClientError,
+  type CitizenReport,
+  type WaterDepth,
+} from "@/lib/api/reports";
 import type { ForecastFramesPhase } from "@/lib/hooks/useForecastFrames";
 import {
   FORECAST_FRAMES_COPY,
   formatDateTime,
+  formatRelativeTime,
   freshnessLabel,
   type Language as ForecastLanguage,
 } from "@/lib/i18n/forecastFrames";
@@ -392,6 +402,58 @@ function useShelters(): SheltersState {
   return state;
 }
 
+/** Lifecycle phase for the approved citizen-reports fetch. */
+type ReportsPhase = "loading" | "ready" | "empty" | "error";
+
+interface ReportsState {
+  phase: ReportsPhase;
+  reports: ReadonlyArray<CitizenReport>;
+}
+
+/**
+ * Fetch approved citizen reports and expose a small state machine plus a manual
+ * reload trigger (used after a successful submission so a freshly-approved
+ * report would appear once moderated).
+ *
+ * Errors never throw to the render tree — a failed reports fetch must not blank
+ * the dashboard, and the error phase lets the UI warn rather than imply "no
+ * flooding reported anywhere".
+ */
+function useApprovedReports(): ReportsState & { reload: () => void } {
+  const [state, setState] = useState<ReportsState>({
+    phase: "loading",
+    reports: [],
+  });
+  // Bumping this re-runs the fetch effect.
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState((prev) => ({ ...prev, phase: "loading" }));
+    fetchApprovedReports(undefined, controller.signal)
+      .then((data) => {
+        setState({
+          phase: data.reports.length === 0 ? "empty" : "ready",
+          reports: data.reports,
+        });
+      })
+      .catch((error: unknown) => {
+        if (
+          error instanceof ReportsApiClientError &&
+          error.detail.kind === "aborted"
+        ) {
+          return;
+        }
+        setState({ phase: "error", reports: [] });
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [reloadToken]);
+
+  return { ...state, reload: () => setReloadToken((token) => token + 1) };
+}
+
 export function App() {
   const [language, setLanguage] = useState<Language>("th");
   const [activeLayer, setActiveLayer] = useState<MapLayer>("rain");
@@ -437,6 +499,12 @@ export function App() {
   const [userOrigin, setUserOrigin] = useState<readonly [number, number] | null>(
     null,
   );
+
+  // ---- Citizen reports (HFT-74) ---------------------------------------
+  const reportsState = useApprovedReports();
+  const [showReports, setShowReports] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
 
   const t = copy[language];
   const currentForecast = forecast[forecastIndex];
@@ -518,6 +586,11 @@ export function App() {
       sheltersState.shelters.find((s) => s.id === selectedShelterId) ?? null,
     [sheltersState.shelters, selectedShelterId],
   );
+  const selectedReport = useMemo<CitizenReport | null>(
+    () =>
+      reportsState.reports.find((r) => r.id === selectedReportId) ?? null,
+    [reportsState.reports, selectedReportId],
+  );
 
   if (page === "history") {
     return (
@@ -585,6 +658,15 @@ export function App() {
                   )}
                 />
                 {t.refresh as string}
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full bg-sky-600 text-white hover:bg-sky-500"
+                onClick={() => setReportDialogOpen(true)}
+                aria-label={mapCopy.reportEntryAria}
+              >
+                <Megaphone className="size-4" />
+                {mapCopy.reportEntry}
               </Button>
               <AlertSubscriptionButton language={language} copy={mapCopy} />
             </div>
@@ -795,6 +877,27 @@ export function App() {
                     <Home className="size-3.5" />
                     {mapCopy.shelterToggle}
                   </button>
+                  {/* Citizen reports: persistent overlay independent of the
+                      layer tabs, like shelters. Uses a sky/blue accent to match
+                      the report depth scale and stay clear of the risk palette
+                      and the indigo shelter markers. Disabled until reports are
+                      ready (loading/empty/error keep it off). */}
+                  <button
+                    type="button"
+                    onClick={() => setShowReports((on) => !on)}
+                    disabled={reportsState.phase !== "ready"}
+                    aria-pressed={showReports}
+                    aria-label={mapCopy.reportsToggleAria}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+                      showReports
+                        ? "border-sky-600 bg-sky-600 text-white shadow"
+                        : "border-sky-200 bg-white text-sky-700 hover:bg-sky-50",
+                    )}
+                  >
+                    <Megaphone className="size-3.5" />
+                    {mapCopy.reportsToggle}
+                  </button>
                 </div>
               </div>
             </CardHeader>
@@ -811,6 +914,8 @@ export function App() {
                     riskOverlay={riskOverlay}
                     shelters={sheltersState.shelters}
                     showShelters={showShelters}
+                    reports={reportsState.reports}
+                    showReports={showReports}
                     activeLayer={activeLayer}
                     selectedStationId={selectedStationId}
                     language={language}
@@ -822,6 +927,10 @@ export function App() {
                     onSelectShelter={(shelterId) => {
                       setSelectedShelterId(shelterId);
                       setShowShelters(true);
+                    }}
+                    onSelectReport={(reportId) => {
+                      setSelectedReportId(reportId);
+                      setShowReports(true);
                     }}
                   />
                 </MapErrorBoundary>
@@ -886,6 +995,17 @@ export function App() {
                       </p>
                     )}
                   </div>
+                )}
+
+                {/* On-map citizen-report selection popup. Shows reported depth,
+                    note, an optional photo thumbnail, and relative time. */}
+                {showReports && selectedReport && (
+                  <ReportPopup
+                    report={selectedReport}
+                    language={language}
+                    mapCopy={mapCopy}
+                    onClose={() => setSelectedReportId(null)}
+                  />
                 )}
 
                 <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 rounded-3xl border border-white/70 bg-white/90 p-3 shadow-xl backdrop-blur">
@@ -1033,6 +1153,19 @@ export function App() {
           </button>
         </footer>
       </div>
+
+      <ReportFloodingDialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        language={language}
+        copy={mapCopy}
+        onSubmitted={() => {
+          // Refetch approved reports. A freshly-submitted report stays pending
+          // until moderated, so it will not appear immediately — the reload
+          // keeps the layer current with whatever is already approved.
+          reportsState.reload();
+        }}
+      />
     </main>
   );
 }
@@ -1533,6 +1666,79 @@ function NearestSheltersCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * On-map popup for a selected citizen flood report.
+ *
+ * Renders the reported water depth, the optional note, a photo thumbnail when
+ * one is attached (resolved against the API origin), and a relative-time line.
+ * Uses the same sky/blue accent as the report map layer so the popup reads as a
+ * citizen observation, distinct from the indigo shelter popup.
+ */
+function ReportPopup({
+  report,
+  language,
+  mapCopy,
+  onClose,
+}: {
+  report: CitizenReport;
+  language: Language;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+  onClose: () => void;
+}) {
+  const depthLabel = mapCopy.reportDepthLabels[report.water_depth as WaterDepth];
+  const relative = formatRelativeTime(report.created_at, mapCopy);
+  const photoSrc = resolveReportPhotoUrl(report.photo_url);
+
+  return (
+    <div
+      className="absolute left-3 right-3 top-3 z-20 rounded-2xl border border-sky-200 bg-white/95 p-3 shadow-xl backdrop-blur"
+      data-testid="report-popup"
+      role="dialog"
+      aria-label={mapCopy.reportPopupTitle}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-sm font-black text-slate-900">
+            <Waves className="size-4 text-sky-600" aria-hidden />
+            {mapCopy.reportPopupTitle}
+          </p>
+          <p className="mt-1 text-xs font-bold text-sky-800">
+            {mapCopy.reportPopupDepth(depthLabel)}
+          </p>
+          {report.note && (
+            <p className="mt-1 break-words text-xs text-slate-600">
+              {report.note}
+            </p>
+          )}
+          {relative && (
+            <p className="mt-1 text-[11px] text-slate-400">
+              {mapCopy.reportPopupTime(relative)}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={language === "th" ? "ปิด" : "Close"}
+          className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        >
+          <span aria-hidden className="text-lg leading-none">
+            ×
+          </span>
+        </button>
+      </div>
+      {report.has_photo && photoSrc && (
+        <img
+          src={photoSrc}
+          alt={mapCopy.reportPhotoAlt}
+          loading="lazy"
+          className="mt-2 h-32 w-full rounded-xl border border-slate-200 object-cover"
+        />
+      )}
+    </div>
   );
 }
 
