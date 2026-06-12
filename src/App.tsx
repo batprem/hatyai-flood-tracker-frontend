@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { HistoricalEventList } from "@/components/HistoricalEventList";
 import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import {
+  AlertOctagon,
   AlertTriangle,
   Clock3,
   CloudRain,
@@ -10,6 +18,7 @@ import {
   Info,
   Languages,
   Layers,
+  type LucideIcon,
   MapPin,
   Megaphone,
   Navigation,
@@ -55,9 +64,11 @@ import {
   fetchApprovedReports,
   resolveReportPhotoUrl,
   ReportsApiClientError,
+  WaterDepthValues,
   type CitizenReport,
   type WaterDepth,
 } from "@/lib/api/reports";
+import { REPORT_DEPTH_COLORS } from "@/components/map/reportsSource";
 import type { ForecastFramesPhase } from "@/lib/hooks/useForecastFrames";
 import {
   FORECAST_FRAMES_COPY,
@@ -72,6 +83,20 @@ type Language = "th" | "en";
 type RiskLevel = "green" | "yellow" | "orange" | "red";
 type MapLayer = BasinMapLayer;
 
+/**
+ * Historical-events route, code-split so its component tree (and the data it
+ * pulls in) is only downloaded when a user actually visits `/history`. The
+ * dashboard is the hot path on low-powered mobile; the research-oriented
+ * history view is secondary, so deferring it keeps the initial bundle smaller.
+ * `HistoricalEventList` is a named export, so the dynamic import maps it onto
+ * the `default` shape `lazy` expects.
+ */
+const HistoricalEventList = lazy(() =>
+  import("@/components/HistoricalEventList").then((module) => ({
+    default: module.HistoricalEventList,
+  })),
+);
+
 type RiskMeta = {
   label: Record<Language, string>;
   meaning: Record<Language, string>;
@@ -80,6 +105,14 @@ type RiskMeta = {
   dotClass: string;
   panelClass: string;
   mapClass: string;
+  /**
+   * Non-color redundant cues so color-blind users can tell the four levels
+   * apart without relying on hue. `Icon` is a distinct escalation glyph; `glyph`
+   * is a compact text marker (also color-independent) used where an icon does
+   * not fit. WCAG SC 1.4.1 (Use of Color): color is never the only channel.
+   */
+  Icon: LucideIcon;
+  glyph: string;
 };
 
 type ForecastStep = {
@@ -120,6 +153,8 @@ const riskMeta: Record<RiskLevel, RiskMeta> = {
     dotClass: "bg-emerald-500",
     panelClass: "from-emerald-500 to-teal-500",
     mapClass: "bg-emerald-400/70 border-emerald-100",
+    Icon: ShieldCheck,
+    glyph: "1",
   },
   yellow: {
     label: { th: "เหลือง", en: "Yellow" },
@@ -132,6 +167,8 @@ const riskMeta: Record<RiskLevel, RiskMeta> = {
     dotClass: "bg-amber-400",
     panelClass: "from-amber-400 to-yellow-500",
     mapClass: "bg-amber-400/75 border-amber-100",
+    Icon: Info,
+    glyph: "2",
   },
   orange: {
     label: { th: "ส้ม", en: "Orange" },
@@ -144,6 +181,8 @@ const riskMeta: Record<RiskLevel, RiskMeta> = {
     dotClass: "bg-orange-500",
     panelClass: "from-orange-500 to-red-400",
     mapClass: "bg-orange-500/75 border-orange-100",
+    Icon: AlertTriangle,
+    glyph: "3",
   },
   red: {
     label: { th: "แดง", en: "Red" },
@@ -156,6 +195,8 @@ const riskMeta: Record<RiskLevel, RiskMeta> = {
     dotClass: "bg-red-500",
     panelClass: "from-red-600 to-rose-500",
     mapClass: "bg-red-500/80 border-red-100",
+    Icon: AlertOctagon,
+    glyph: "4",
   },
 };
 
@@ -597,10 +638,23 @@ export function App() {
       <main className="min-h-screen overflow-hidden bg-slate-950 text-slate-50">
         <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.24),_transparent_30%),radial-gradient(circle_at_80%_10%,_rgba(45,212,191,0.2),_transparent_26%),linear-gradient(180deg,_#07111f_0%,_#0f172a_100%)]" />
         <div className="relative mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-          <HistoricalEventList
-            language={language}
-            onNavigateDashboard={navigateToDashboard}
-          />
+          <Suspense
+            fallback={
+              <p
+                className="flex items-center justify-center gap-2 py-16 text-sm text-slate-300"
+                role="status"
+                aria-live="polite"
+              >
+                <RefreshCw className="size-4 animate-spin" aria-hidden />
+                {mapCopy.loading}
+              </p>
+            }
+          >
+            <HistoricalEventList
+              language={language}
+              onNavigateDashboard={navigateToDashboard}
+            />
+          </Suspense>
         </div>
       </main>
     );
@@ -694,16 +748,18 @@ export function App() {
                 </div>
                 <span
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold",
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-bold",
                     riskMeta[currentRisk].badgeClass
                   )}
+                  aria-label={`${riskMeta[currentRisk].label[language]} — ${mapCopy.riskLevelOrdinal(
+                    riskOrder.indexOf(currentRisk) + 1,
+                    riskOrder.length,
+                  )}`}
                 >
-                  <span
-                    className={cn(
-                      "size-2.5 rounded-full",
-                      riskMeta[currentRisk].dotClass
-                    )}
-                  />
+                  {(() => {
+                    const RiskIcon = riskMeta[currentRisk].Icon;
+                    return <RiskIcon className="size-4 shrink-0" aria-hidden />;
+                  })()}
                   {riskMeta[currentRisk].label[language]}
                 </span>
               </div>
@@ -717,7 +773,10 @@ export function App() {
               >
                 <div className="flex items-start gap-4">
                   <div className="rounded-2xl bg-white/20 p-3">
-                    <AlertTriangle className="size-7" />
+                    {(() => {
+                      const RiskIcon = riskMeta[currentRisk].Icon;
+                      return <RiskIcon className="size-7" aria-hidden />;
+                    })()}
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white/80">
@@ -846,7 +905,7 @@ export function App() {
                           key={layer}
                           onClick={() => setActiveLayer(layer)}
                           className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-bold transition",
+                            "inline-flex min-h-11 items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold transition",
                             activeLayer === layer
                               ? "bg-slate-950 text-white shadow"
                               : "text-slate-600 hover:bg-white"
@@ -868,7 +927,7 @@ export function App() {
                     aria-pressed={showShelters}
                     aria-label={mapCopy.shelterToggleAria}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+                      "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
                       showShelters
                         ? "border-indigo-900 bg-indigo-900 text-white shadow"
                         : "border-indigo-200 bg-white text-indigo-900 hover:bg-indigo-50"
@@ -889,7 +948,7 @@ export function App() {
                     aria-pressed={showReports}
                     aria-label={mapCopy.reportsToggleAria}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
+                      "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50",
                       showReports
                         ? "border-sky-600 bg-sky-600 text-white shadow"
                         : "border-sky-200 bg-white text-sky-700 hover:bg-sky-50",
@@ -898,6 +957,15 @@ export function App() {
                     <Megaphone className="size-3.5" />
                     {mapCopy.reportsToggle}
                   </button>
+                  {/* Feed status for the citizen-reports layer. The toggle pill
+                      above is disabled in loading/empty/error states; this line
+                      tells users *why* the layer is unavailable so an empty or
+                      failed feed never reads as "no flooding anywhere". Renders
+                      nothing once reports are ready. */}
+                  <ReportsFeedStatus
+                    phase={reportsState.phase}
+                    mapCopy={mapCopy}
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -980,7 +1048,7 @@ export function App() {
                         type="button"
                         onClick={() => setSelectedShelterId(null)}
                         aria-label={language === "th" ? "ปิด" : "Close"}
-                        className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                       >
                         <span aria-hidden className="text-lg leading-none">
                           ×
@@ -988,7 +1056,7 @@ export function App() {
                       </button>
                     </div>
                     {sheltersState.retrievedDate && (
-                      <p className="mt-2 text-[10px] text-slate-400">
+                      <p className="mt-2 text-[10px] text-slate-600">
                         {mapCopy.shelterDatasetDate(
                           sheltersState.retrievedDate,
                         )}
@@ -1010,13 +1078,13 @@ export function App() {
 
                 <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 rounded-3xl border border-white/70 bg-white/90 p-3 shadow-xl backdrop-blur">
                   <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                    {riskOrder.map((level) => (
+                    {riskOrder.map((level, index) => (
                       <div key={level} className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "size-3 rounded-full",
-                            riskMeta[level].dotClass
-                          )}
+                        <RiskGlyph
+                          level={level}
+                          ordinal={index + 1}
+                          language={language}
+                          mapCopy={mapCopy}
                         />
                         <span className="font-semibold text-slate-700">
                           {riskMeta[level].label[language]}
@@ -1024,10 +1092,43 @@ export function App() {
                       </div>
                     ))}
                   </div>
-                  <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-500">
+
+                  {/* Citizen-report depth key, shown only when the reports layer
+                      is on. The blue circles are graduated by depth — color
+                      alone is not a reliable channel, so each step carries its
+                      depth text label and a size cue (shallow -> deep). */}
+                  {showReports && (
+                    <div
+                      className="mt-2 border-t border-slate-200/70 pt-2"
+                      data-testid="reports-depth-legend"
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                        {mapCopy.reportsLegendTitle}
+                      </p>
+                      <div className="mt-1 grid grid-cols-2 gap-1.5 text-xs sm:grid-cols-4">
+                        {WaterDepthValues.map((depth, depthIndex) => (
+                          <div key={depth} className="flex items-center gap-2">
+                            <span
+                              className="shrink-0 rounded-full border border-white shadow-sm"
+                              style={{
+                                backgroundColor: REPORT_DEPTH_COLORS[depth],
+                                width: `${8 + depthIndex * 3}px`,
+                                height: `${8 + depthIndex * 3}px`,
+                              }}
+                              aria-hidden
+                            />
+                            <span className="font-semibold text-slate-700">
+                              {mapCopy.reportDepthLabels[depth]}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-600">
                     {mapCopy.mapAttributionLabel}: {mapCopy.mapTileAttribution}
                   </p>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-slate-600">
                     {mapCopy.mapTileLicense}
                   </p>
                 </div>
@@ -1107,26 +1208,26 @@ export function App() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {riskOrder.map((level) => (
+                {riskOrder.map((level, index) => (
                   <button
                     type="button"
                     key={level}
                     className="w-full rounded-2xl border border-slate-200 p-3 text-left transition hover:border-slate-400 hover:bg-slate-50"
                     onClick={() => {
-                      const index = forecast.findIndex(
+                      const stepIndex = forecast.findIndex(
                         (step) => step.level === level
                       );
-                      if (index >= 0) {
-                        setForecastIndex(index);
+                      if (stepIndex >= 0) {
+                        setForecastIndex(stepIndex);
                       }
                     }}
                   >
                     <span className="flex items-center gap-2 font-black">
-                      <span
-                        className={cn(
-                          "size-3 rounded-full",
-                          riskMeta[level].dotClass
-                        )}
+                      <RiskGlyph
+                        level={level}
+                        ordinal={index + 1}
+                        language={language}
+                        mapCopy={mapCopy}
                       />
                       {riskMeta[level].label[language]}
                     </span>
@@ -1167,6 +1268,89 @@ export function App() {
         }}
       />
     </main>
+  );
+}
+
+/**
+ * Color-independent risk marker used in the map legend and the risk-scale list.
+ *
+ * Satisfies WCAG SC 1.4.1 (Use of Color): the canonical risk hue is one of
+ * three redundant channels — a colored chip carries (1) the per-level escalation
+ * icon shape and (2) the ordinal number glyph, with (3) an accessible
+ * "Level N of 4" label for assistive tech. Color-blind users distinguish the
+ * four levels by icon and number, not hue alone.
+ */
+function RiskGlyph({
+  level,
+  ordinal,
+  language,
+  mapCopy,
+}: {
+  level: RiskLevel;
+  ordinal: number;
+  language: Language;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  const { Icon, glyph, dotClass } = riskMeta[level];
+  return (
+    <span
+      className={cn(
+        "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-white",
+        dotClass,
+      )}
+      role="img"
+      aria-label={`${riskMeta[level].label[language]} — ${mapCopy.riskLevelOrdinal(
+        ordinal,
+        riskOrder.length,
+      )}`}
+      title={mapCopy.riskLevelOrdinal(ordinal, riskOrder.length)}
+    >
+      <Icon className="size-3" aria-hidden />
+      <span className="sr-only">{glyph}</span>
+    </span>
+  );
+}
+
+/**
+ * Inline status for the citizen-reports map layer, shown beside the toggle pill.
+ *
+ * The reports toggle is disabled in every non-ready phase, which on its own is
+ * silent. This line explains the disabled state — loading, empty, or error — so
+ * an unavailable feed never lets the map imply "no flooding reported anywhere".
+ * Renders nothing in the ready phase (the toggle is then enabled and explains
+ * itself). Wires up the previously-unused `reportsLoading`/`reportsEmpty`/
+ * `reportsError` i18n keys.
+ */
+function ReportsFeedStatus({
+  phase,
+  mapCopy,
+}: {
+  phase: ReportsPhase;
+  mapCopy: (typeof FORECAST_FRAMES_COPY)[Language];
+}) {
+  if (phase === "ready") {
+    return null;
+  }
+
+  const label =
+    phase === "loading"
+      ? mapCopy.reportsLoading
+      : phase === "empty"
+        ? mapCopy.reportsEmpty
+        : mapCopy.reportsError;
+  const isError = phase === "error";
+
+  return (
+    <p
+      className={cn(
+        "basis-full text-xs",
+        isError ? "font-semibold text-red-700" : "text-slate-600",
+      )}
+      role={isError ? "alert" : "status"}
+      aria-live="polite"
+    >
+      {label}
+    </p>
   );
 }
 
@@ -1650,12 +1834,12 @@ function NearestSheltersCard({
 
             {/* Dataset freshness + coordinate accuracy note, accessible. */}
             {retrievedDate && (
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-600">
                 {mapCopy.shelterDatasetDate(retrievedDate)}
               </p>
             )}
             {accuracyNote && (
-              <details className="text-[11px] text-slate-500">
+              <details className="text-[11px] text-slate-600">
                 <summary className="cursor-pointer font-semibold text-slate-600">
                   {mapCopy.shelterAccuracyNote}
                 </summary>
@@ -1714,7 +1898,7 @@ function ReportPopup({
             </p>
           )}
           {relative && (
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-1 text-[11px] text-slate-600">
               {mapCopy.reportPopupTime(relative)}
             </p>
           )}
@@ -1723,7 +1907,7 @@ function ReportPopup({
           type="button"
           onClick={onClose}
           aria-label={language === "th" ? "ปิด" : "Close"}
-          className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
         >
           <span aria-hidden className="text-lg leading-none">
             ×

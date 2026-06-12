@@ -185,6 +185,11 @@ const result = await build({
   minify: true,
   target: "browser",
   sourcemap: "linked",
+  // Enable code splitting so dynamic `import()` (e.g. the lazily-loaded
+  // historical-events route) emits its own chunk instead of being inlined into
+  // the main bundle. This keeps the initial download lighter on low-powered
+  // mobile devices — the heavy history view is only fetched when visited.
+  splitting: true,
   define: envDefines,
   ...cliConfig, // Merge in any CLI-provided options
 });
