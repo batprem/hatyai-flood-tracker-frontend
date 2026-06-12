@@ -110,7 +110,6 @@ function resolveSubmitErrorMessage(
 export function ReportFloodingDialog({
   open,
   onClose,
-  language,
   copy,
   onSubmitted,
 }: ReportFloodingDialogProps) {
@@ -297,7 +296,7 @@ export function ReportFloodingDialog({
             type="button"
             onClick={onClose}
             aria-label={copy.reportCancel}
-            className="shrink-0 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
           >
             <X className="size-5" aria-hidden />
           </button>
@@ -425,7 +424,7 @@ export function ReportFloodingDialog({
               <p
                 className={cn(
                   "text-right text-xs",
-                  noteRemaining <= 0 ? "font-semibold text-orange-600" : "text-slate-400",
+                  noteRemaining <= 0 ? "font-semibold text-orange-600" : "text-slate-500",
                 )}
                 aria-live="polite"
               >

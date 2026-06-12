@@ -222,6 +222,13 @@ export interface ForecastFramesCopy {
   relativeHoursAgo: (hours: number) => string;
   /** Relative-time formatter: days ago. */
   relativeDaysAgo: (days: number) => string;
+  // ---- Risk-level non-color cues (HFT-77, WCAG 1.4.1) ------------------
+  /**
+   * Accessible ordinal for a risk level shown alongside the icon/number glyph,
+   * e.g. "Level 3 of 4". Lets screen-reader users and color-blind users read
+   * severity ordering without relying on hue.
+   */
+  riskLevelOrdinal: (level: number, total: number) => string;
 }
 
 const TH: ForecastFramesCopy = {
@@ -370,6 +377,8 @@ const TH: ForecastFramesCopy = {
   relativeMinutesAgo: (minutes: number) => `${minutes} นาทีที่แล้ว`,
   relativeHoursAgo: (hours: number) => `${hours} ชั่วโมงที่แล้ว`,
   relativeDaysAgo: (days: number) => `${days} วันที่แล้ว`,
+  riskLevelOrdinal: (level: number, total: number) =>
+    `ระดับที่ ${level} จาก ${total}`,
 };
 
 const EN: ForecastFramesCopy = {
@@ -522,6 +531,8 @@ const EN: ForecastFramesCopy = {
   relativeHoursAgo: (hours: number) =>
     `${hours} hour${hours === 1 ? "" : "s"} ago`,
   relativeDaysAgo: (days: number) => `${days} day${days === 1 ? "" : "s"} ago`,
+  riskLevelOrdinal: (level: number, total: number) =>
+    `Level ${level} of ${total}`,
 };
 
 export const FORECAST_FRAMES_COPY: Record<Language, ForecastFramesCopy> = {

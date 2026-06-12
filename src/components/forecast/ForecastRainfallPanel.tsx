@@ -1,4 +1,13 @@
-import { AlertTriangle, Loader2, RefreshCw, Wifi } from "lucide-react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  Info,
+  Loader2,
+  type LucideIcon,
+  RefreshCw,
+  ShieldCheck,
+  Wifi,
+} from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -324,24 +333,43 @@ interface ForecastRainfallLegendProps {
   copy: ForecastFramesCopy;
 }
 
+/**
+ * Per-level escalation icon, kept in sync with the dashboard risk legend in
+ * `App.tsx`. The icon is a non-color cue (WCAG SC 1.4.1) so the rainfall-risk
+ * legend is distinguishable without relying on the swatch hue.
+ */
+const RISK_LEVEL_ICONS: Record<(typeof RiskLevels)[number], LucideIcon> = {
+  green: ShieldCheck,
+  yellow: Info,
+  orange: AlertTriangle,
+  red: AlertOctagon,
+};
+
 export function ForecastRainfallLegend({ copy }: ForecastRainfallLegendProps) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 text-xs">
-      <p className="font-bold uppercase tracking-wide text-slate-500">
+      <p className="font-bold uppercase tracking-wide text-slate-600">
         {copy.legendTitle}
       </p>
       <ul className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
-        {RiskLevels.map((level) => (
-          <li key={level} className="flex items-center gap-1.5">
-            <span
-              className={`inline-block size-3 rounded-sm ${RISK_LEVEL_STYLES[level].fill}`}
-              aria-hidden
-            />
-            <span className="font-semibold capitalize text-slate-700">{level}</span>
-          </li>
-        ))}
+        {RiskLevels.map((level) => {
+          const Icon = RISK_LEVEL_ICONS[level];
+          return (
+            <li key={level} className="flex items-center gap-1.5">
+              <span
+                className={`inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-white ${RISK_LEVEL_STYLES[level].dot}`}
+                aria-hidden
+              >
+                <Icon className="size-2.5" />
+              </span>
+              <span className="font-semibold capitalize text-slate-700">
+                {level}
+              </span>
+            </li>
+          );
+        })}
       </ul>
-      <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400">
+      <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-600">
         {copy.legendUnit}
       </p>
     </div>
