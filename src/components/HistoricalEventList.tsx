@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ExportDownloadControl } from "@/components/ExportDownloadControl";
 import { cn } from "@/lib/utils";
 import {
   fetchHistoricalEvents,
@@ -461,6 +462,9 @@ export function HistoricalEventList({
           </p>
         </div>
       )}
+
+      {/* Research export download (HFT-78) — available regardless of list state */}
+      {!loading && <ExportDownloadControl language={language} />}
     </div>
   );
 }
