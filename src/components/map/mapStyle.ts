@@ -34,12 +34,9 @@ const MAPTILER_ATTRIBUTION =
 /**
  * Build a MapLibre style + attribution pair using the configured tile provider.
  *
- * Reads `process.env.VITE_MAPTILER_KEY` at build/dev time (Bun inlines the
- * literal per `bunfig.toml` and `build.ts`). If the key is missing or the
- * runtime environment does not expose `process.env` (the browser case once the
- * literal has been inlined to `undefined`), falls back to the OpenFreeMap
- * "bright" style so the dashboard still renders roads and place names without
- * an account.
+ * Reads `import.meta.env.VITE_MAPTILER_KEY` at build/dev time via Vite's env
+ * substitution. If the key is absent, falls back to the OpenFreeMap "bright"
+ * style so the dashboard renders roads and place names without an account.
  */
 export function resolveMapStyle(): MapStyleResolution {
   const maptilerKey = readMaptilerKey();
@@ -60,19 +57,7 @@ export function resolveMapStyle(): MapStyleResolution {
 }
 
 function readMaptilerKey(): string | undefined {
-  // Bun replaces the LITERAL `process.env.VITE_MAPTILER_KEY` reference at
-  // build/dev time (allow-listed via `bunfig.toml` and `build.ts`'s `define`
-  // map). The substitution must be on the literal expression for the bundler
-  // to catch it, so we read it directly here and rely on `build.ts` mapping
-  // unset vars to the literal `undefined` (HFT-17). We still guard with
-  // `typeof` so a runtime where `process` exists but the var is missing — or
-  // where Bun did not perform substitution — does not throw.
-  let value: string | undefined;
-  try {
-    value = process.env.VITE_MAPTILER_KEY;
-  } catch {
-    value = undefined;
-  }
+  const value = import.meta.env.VITE_MAPTILER_KEY;
   if (typeof value === "string" && value.length > 0) {
     return value;
   }
