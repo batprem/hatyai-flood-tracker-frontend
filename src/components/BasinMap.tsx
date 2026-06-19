@@ -62,6 +62,13 @@ import {
   buildRiversLabelLayer,
 } from "@/components/map/riversSource";
 import {
+  ADMIN_BOUNDARY_SOURCE_ID,
+  buildAdminBoundarySource,
+  buildAdminTambonLayer,
+  buildAdminAmphoeLayer,
+  buildAdminLabelLayer,
+} from "@/components/map/adminBoundarySource";
+import {
   SHELTERS_SOURCE_ID,
   SHELTERS_MARKER_LAYER_ID,
   SHELTERS_SYMBOL_LAYER_ID,
@@ -227,12 +234,20 @@ export function BasinMap(props: BasinMapProps) {
       });
 
       // Add sources first so layer expressions resolve cleanly.
+      map.addSource(ADMIN_BOUNDARY_SOURCE_ID, buildAdminBoundarySource());
       map.addSource(RAINFALL_SOURCE_ID, buildRainfallSource(null));
       map.addSource(STATIONS_SOURCE_ID, buildStationsSource([]));
       map.addSource(RISK_SOURCE_ID, buildRiskSource([]));
       map.addSource(SHELTERS_SOURCE_ID, buildSheltersSource([]));
       map.addSource(REPORTS_SOURCE_ID, buildReportsSource([]));
       map.addSource(RIVERS_SOURCE_ID, buildRiversSource());
+
+      // Admin context layers go first — below all data fills, risk/rain
+      // overlays, and public-safety markers so they never obscure hazard or
+      // shelter information.
+      map.addLayer(buildAdminAmphoeLayer());
+      map.addLayer(buildAdminTambonLayer());
+      map.addLayer(buildAdminLabelLayer());
 
       map.addLayer(buildRiskFillLayer(false));
       map.addLayer(buildRiskOutlineLayer(false));
