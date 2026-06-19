@@ -56,6 +56,12 @@ import {
 } from "@/components/map/riskSource";
 import { addBasinBoundaryLayer } from "@/components/map/basinBoundarySource";
 import {
+  RIVERS_SOURCE_ID,
+  buildRiversSource,
+  buildRiversLineLayer,
+  buildRiversLabelLayer,
+} from "@/components/map/riversSource";
+import {
   SHELTERS_SOURCE_ID,
   SHELTERS_MARKER_LAYER_ID,
   SHELTERS_SYMBOL_LAYER_ID,
@@ -195,11 +201,17 @@ export function BasinMap(props: BasinMapProps) {
       map.addSource(RISK_SOURCE_ID, buildRiskSource([]));
       map.addSource(SHELTERS_SOURCE_ID, buildSheltersSource([]));
       map.addSource(REPORTS_SOURCE_ID, buildReportsSource([]));
+      map.addSource(RIVERS_SOURCE_ID, buildRiversSource());
 
       map.addLayer(buildRiskFillLayer(false));
       map.addLayer(buildRiskOutlineLayer(false));
       map.addLayer(buildRainfallFillLayer(false));
       map.addLayer(buildRainfallOutlineLayer(false));
+      // River network sits above the risk/rainfall fills so the waterway
+      // geometry is readable, but below station pins and the basin boundary
+      // outline so interactive markers stay on top.
+      map.addLayer(buildRiversLineLayer());
+      map.addLayer(buildRiversLabelLayer());
       map.addLayer(buildStationsCircleLayer(false));
       map.addLayer(buildSelectedStationLayer(null));
       addBasinBoundaryLayer(map);
