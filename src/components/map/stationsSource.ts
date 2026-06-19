@@ -5,6 +5,7 @@
 
 import type {
   CircleLayerSpecification,
+  SymbolLayerSpecification,
   GeoJSONSourceSpecification,
 } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
@@ -35,6 +36,8 @@ export const STATIONS_SOURCE_ID = "hft-stations-source";
 export const STATIONS_LAYER_ID = "hft-stations-circles";
 /** Layer ID for the selected-station highlight ring. */
 export const STATIONS_SELECTED_LAYER_ID = "hft-stations-selected";
+/** Layer ID for station water-level + trend labels (visible at zoom ≥ 11). */
+export const STATIONS_LABEL_LAYER_ID = "hft-stations-label";
 
 /** GeoJSON properties on each station feature. */
 export interface StationFeatureProperties {
@@ -44,6 +47,8 @@ export interface StationFeatureProperties {
   trend: StationTrend;
   nameEn: string;
   nameTh: string;
+  /** Pre-formatted label shown at zoom ≥ 11, e.g. "2.4m ↑". */
+  label: string;
 }
 
 /** Type-safe alias for the station feature collection. */
@@ -54,22 +59,37 @@ export function buildStationFeatureCollection(
   stations: ReadonlyArray<MapStation>,
 ): StationFeatureCollection {
   const features: Feature<Point, StationFeatureProperties>[] = stations.map(
-    (station) => ({
-      type: "Feature",
-      id: station.id,
-      geometry: {
-        type: "Point",
-        coordinates: [station.coordinates[0], station.coordinates[1]],
-      },
-      properties: {
-        stationId: station.id,
-        riskLevel: station.risk,
-        waterLevelM: station.waterLevelM,
-        trend: station.trend,
-        nameEn: station.nameEn,
-        nameTh: station.nameTh,
-      },
-    }),
+    (station) => {
+      const arrow =
+        station.trend === "rising"
+          ? "↑"
+          : station.trend === "falling"
+            ? "↓"
+            : station.trend === "stable"
+              ? "→"
+              : "";
+      const label =
+        station.waterLevelM != null
+          ? `${station.waterLevelM.toFixed(1)}m ${arrow}`.trim()
+          : arrow;
+      return {
+        type: "Feature",
+        id: station.id,
+        geometry: {
+          type: "Point",
+          coordinates: [station.coordinates[0], station.coordinates[1]],
+        },
+        properties: {
+          stationId: station.id,
+          riskLevel: station.risk,
+          waterLevelM: station.waterLevelM,
+          trend: station.trend,
+          nameEn: station.nameEn,
+          nameTh: station.nameTh,
+          label,
+        },
+      };
+    },
   );
   return { type: "FeatureCollection", features };
 }
@@ -148,6 +168,38 @@ export function buildSelectedStationLayer(
       "circle-color": "transparent",
       "circle-stroke-color": "rgba(15, 23, 42, 0.6)",
       "circle-stroke-width": 4,
+    },
+  };
+}
+
+/**
+ * Symbol layer that renders a water-level + trend label below each station
+ * pin. Only becomes visible at zoom ≥ 11 to avoid clutter at basin-wide zoom.
+ * The label text is pre-formatted in the feature properties (e.g. "2.4m ↑")
+ * to keep the MapLibre expression simple.
+ *
+ * @param visible - Initial layer visibility; the BasinMap toggles this when
+ *   the stations tab is active.
+ */
+export function buildStationsLabelLayer(visible: boolean): SymbolLayerSpecification {
+  return {
+    id: STATIONS_LABEL_LAYER_ID,
+    type: "symbol",
+    source: STATIONS_SOURCE_ID,
+    minzoom: 11,
+    layout: {
+      visibility: visible ? "visible" : "none",
+      "text-field": ["get", "label"],
+      "text-size": 11,
+      "text-anchor": "top",
+      "text-offset": [0, 1.2],
+      "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+      "text-optional": true,
+    },
+    paint: {
+      "text-color": "#1e293b",
+      "text-halo-color": "#ffffff",
+      "text-halo-width": 1.5,
     },
   };
 }
