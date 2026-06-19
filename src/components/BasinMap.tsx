@@ -34,12 +34,14 @@ import {
   buildRainfallSource,
 } from "@/components/map/rainfallSource";
 import {
+  STATIONS_LABEL_LAYER_ID,
   STATIONS_LAYER_ID,
   STATIONS_SELECTED_LAYER_ID,
   STATIONS_SOURCE_ID,
   buildSelectedStationLayer,
   buildStationFeatureCollection,
   buildStationsCircleLayer,
+  buildStationsLabelLayer,
   buildStationsSource,
   type MapStation,
   type StationFeatureProperties,
@@ -245,6 +247,7 @@ export function BasinMap(props: BasinMapProps) {
       map.addLayer(buildRiversLabelLayer());
       map.addLayer(buildStationsCircleLayer(false));
       map.addLayer(buildSelectedStationLayer(null));
+      map.addLayer(buildStationsLabelLayer(false));
       addBasinBoundaryLayer(map);
       // Citizen reports draw above the data layers but below shelters: a
       // crowd-sourced observation is informational, while evacuation points are
@@ -441,6 +444,8 @@ export function BasinMap(props: BasinMapProps) {
       [RAINFALL_OUTLINE_LAYER_ID]: activeLayer === "rain" ? "visible" : "none",
       [STATIONS_LAYER_ID]: activeLayer === "stations" ? "visible" : "none",
       [STATIONS_SELECTED_LAYER_ID]:
+        activeLayer === "stations" ? "visible" : "none",
+      [STATIONS_LABEL_LAYER_ID]:
         activeLayer === "stations" ? "visible" : "none",
       [RISK_FILL_LAYER_ID]: activeLayer === "risk" ? "visible" : "none",
       [RISK_OUTLINE_LAYER_ID]: activeLayer === "risk" ? "visible" : "none",
