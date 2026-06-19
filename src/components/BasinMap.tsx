@@ -195,6 +195,37 @@ export function BasinMap(props: BasinMapProps) {
     );
 
     map.on("load", () => {
+      // DEM source — Terrarium-encoded elevation tiles (AWS open data, no key).
+      map.addSource("terrain-dem", {
+        type: "raster-dem",
+        tiles: [
+          "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+        ],
+        tileSize: 256,
+        maxzoom: 14,
+        encoding: "terrarium",
+        attribution:
+          '<a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles (AWS)</a>',
+      });
+
+      // Hillshade is added first so it sits at the bottom of the layer stack,
+      // below basemap roads, labels, and all data overlays.
+      map.addLayer({
+        id: "hillshade",
+        type: "hillshade",
+        source: "terrain-dem",
+        minzoom: 7,
+        maxzoom: 15,
+        paint: {
+          "hillshade-illumination-direction": 315,
+          "hillshade-exaggeration": 0.35,
+          "hillshade-shadow-color": "#000000",
+          "hillshade-highlight-color": "#ffffff",
+          "hillshade-accent-color": "#000000",
+          "hillshade-illumination-anchor": "viewport",
+        },
+      });
+
       // Add sources first so layer expressions resolve cleanly.
       map.addSource(RAINFALL_SOURCE_ID, buildRainfallSource(null));
       map.addSource(STATIONS_SOURCE_ID, buildStationsSource([]));
