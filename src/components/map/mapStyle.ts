@@ -1,12 +1,11 @@
 /**
  * Resolve a MapLibre style URL or inline style spec.
  *
- * The dashboard prefers the OpenFreeMap "bright" style so the project can run
- * without an account and still show roads, place names, and water bodies. If
- * `VITE_MAPTILER_KEY` is provided at build/dev time, the style switches to
- * MapTiler's "streets-v2" style for higher-quality tiles. Both providers
- * permit the public-awareness, non-commercial usage documented in
- * `docs/data-sources.md`.
+ * The dashboard prefers the free MapLibre demo style so the project can run
+ * without an account. If `VITE_MAPTILER_KEY` is provided at build/dev time, the
+ * style switches to MapTiler's "streets-v2" style for higher-quality tiles.
+ * Both providers permit the public-awareness, non-commercial usage documented
+ * in `docs/data-sources.md`.
  */
 
 import type { StyleSpecification } from "maplibre-gl";
@@ -19,14 +18,14 @@ export interface MapStyleResolution {
   /** Style URL or inline JSON spec, ready to pass to `new Map({ style })`. */
   style: MapStyleSpec;
   /** Provider key for analytics / debugging. */
-  provider: "openfreemap" | "maptiler";
+  provider: "maplibre-demo" | "maptiler";
   /** Single short attribution string (HTML allowed by MapLibre AttributionControl). */
   attributionHtml: string;
 }
 
-const OPENFREEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
-const OPENFREEMAP_ATTRIBUTION =
-  '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>';
+const MAPLIBRE_DEMO_STYLE_URL = "https://demotiles.maplibre.org/style.json";
+const MAPLIBRE_DEMO_ATTRIBUTION =
+  '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · <a href="https://maplibre.org/" target="_blank" rel="noopener">MapLibre demotiles</a>';
 
 const MAPTILER_ATTRIBUTION =
   '<a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>';
@@ -35,8 +34,8 @@ const MAPTILER_ATTRIBUTION =
  * Build a MapLibre style + attribution pair using the configured tile provider.
  *
  * Reads `import.meta.env.VITE_MAPTILER_KEY` at build/dev time via Vite's env
- * substitution. If the key is absent, falls back to the OpenFreeMap "bright"
- * style so the dashboard renders roads and place names without an account.
+ * substitution. If the key is absent, falls back to MapLibre demotiles so the
+ * dashboard renders without an account.
  */
 export function resolveMapStyle(): MapStyleResolution {
   const maptilerKey = readMaptilerKey();
@@ -50,9 +49,9 @@ export function resolveMapStyle(): MapStyleResolution {
     };
   }
   return {
-    style: OPENFREEMAP_STYLE_URL,
-    provider: "openfreemap",
-    attributionHtml: OPENFREEMAP_ATTRIBUTION,
+    style: MAPLIBRE_DEMO_STYLE_URL,
+    provider: "maplibre-demo",
+    attributionHtml: MAPLIBRE_DEMO_ATTRIBUTION,
   };
 }
 
