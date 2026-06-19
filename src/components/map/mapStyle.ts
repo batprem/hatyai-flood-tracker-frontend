@@ -57,7 +57,15 @@ export function resolveMapStyle(): MapStyleResolution {
 }
 
 function readMaptilerKey(): string | undefined {
-  const value = import.meta.env.VITE_MAPTILER_KEY;
+  let value: string | undefined;
+  try {
+    // Bun replaces this literal at build time via the define map in build.ts
+    // (HFT-17). The try-catch handles browser runtimes where process is not
+    // defined after bundling when no key was set.
+    value = process.env.VITE_MAPTILER_KEY;
+  } catch {
+    value = undefined;
+  }
   if (typeof value === "string" && value.length > 0) {
     return value;
   }
