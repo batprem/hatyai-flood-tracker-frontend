@@ -9,9 +9,10 @@
 import type {
   FillLayerSpecification,
   GeoJSONSourceSpecification,
+  HeatmapLayerSpecification,
   LineLayerSpecification,
 } from "maplibre-gl";
-import type { Feature, FeatureCollection, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
 
 import type { ForecastFrame } from "@/lib/api/forecastFrames";
 import {
@@ -25,6 +26,8 @@ export const RAINFALL_SOURCE_ID = "hft-rainfall-source";
 export const RAINFALL_FILL_LAYER_ID = "hft-rainfall-fill";
 /** Outline layer ID, drawn on top of the fill for cell separation. */
 export const RAINFALL_OUTLINE_LAYER_ID = "hft-rainfall-outline";
+/** Heatmap layer ID that replaces the fill/outline layers for smooth interpolation. */
+export const RAINFALL_HEATMAP_LAYER_ID = "rainfall-heatmap";
 
 /** Per-cell GeoJSON properties exposed to MapLibre style expressions. */
 export interface RainfallCellProperties {
@@ -36,8 +39,25 @@ export interface RainfallCellProperties {
   forecastHour: number;
 }
 
+/** Per-cell point properties for the heatmap layer. Extends cell properties with a numeric weight. */
+export interface RainfallPointProperties extends RainfallCellProperties {
+  /** Numeric weight mapped from riskLevel: green→1, yellow→2, orange→3, red→4. */
+  intensity: number;
+}
+
 /** Type-safe alias for the rainfall grid feature collection. */
 export type RainfallCellCollection = FeatureCollection<Polygon, RainfallCellProperties>;
+
+/** Type-safe alias for the rainfall point feature collection used by the heatmap layer. */
+export type RainfallPointCollection = FeatureCollection<Point, RainfallPointProperties>;
+
+/** Maps a risk level string to a numeric intensity weight for the heatmap. */
+const RISK_INTENSITY: Record<RiskLevel, number> = {
+  green: 1,
+  yellow: 2,
+  orange: 3,
+  red: 4,
+};
 
 /**
  * Build a GeoJSON FeatureCollection with one Polygon per rainfall grid cell.
@@ -116,6 +136,121 @@ export function buildRainfallSource(
   return {
     type: "geojson",
     data: buildRainfallFeatureCollection(frame),
+  };
+}
+
+/**
+ * Build a GeoJSON FeatureCollection with one Point per rainfall grid cell.
+ *
+ * Each point is positioned at the centroid of its grid cell and carries an
+ * `intensity` property (1–4) mapped from the risk level. This is the data
+ * shape expected by the MapLibre heatmap layer.
+ */
+export function buildRainfallPointFeatureCollection(
+  frame: ForecastFrame | null,
+): RainfallPointCollection {
+  if (!frame) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  const {
+    grid,
+    valuesMm,
+    accumulationHours,
+    area: { bbox },
+  } = frame;
+  const [west, south, east, north] = bbox;
+  const cellLng = (east - west) / grid.width;
+  const cellLat = (north - south) / grid.height;
+  const expected = grid.width * grid.height;
+  const validTimeIso = frame.validTime.toISOString();
+
+  const features: Feature<Point, RainfallPointProperties>[] = [];
+  for (let row = 0; row < grid.height; row += 1) {
+    for (let col = 0; col < grid.width; col += 1) {
+      const index = row * grid.width + col;
+      if (index >= expected) break;
+      const rainMm = Number.isFinite(valuesMm[index]) ? valuesMm[index] : 0;
+      // Row 0 is the northern row in geographic raster grids; flip to compute
+      // the cell's north edge and derive the centroid from there.
+      const cellNorth = north - row * cellLat;
+      const cellSouth = cellNorth - cellLat;
+      const cellWest = west + col * cellLng;
+      const cellEast = cellWest + cellLng;
+      const centroidLng = (cellWest + cellEast) / 2;
+      const centroidLat = (cellSouth + cellNorth) / 2;
+      const level = classifyRainfallMm(rainMm, accumulationHours);
+      features.push({
+        type: "Feature",
+        id: index,
+        geometry: {
+          type: "Point",
+          coordinates: [centroidLng, centroidLat],
+        },
+        properties: {
+          cellIndex: index,
+          rainMm,
+          riskLevel: level,
+          intensity: RISK_INTENSITY[level],
+          accumulationHours,
+          validTime: validTimeIso,
+          forecastHour: frame.forecastHour,
+        },
+      });
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * Returns the heatmap layer spec that renders a smooth interpolated rainfall
+ * gradient.
+ *
+ * The layer weight is driven by the `intensity` property (1–4) and the color
+ * ramp mirrors the four-level project risk palette: green → yellow → orange →
+ * red. Visibility is driven by `visible` so callers can toggle without
+ * removing and re-adding the layer.
+ */
+export function buildRainfallHeatmapLayer(visible: boolean): HeatmapLayerSpecification {
+  return {
+    id: RAINFALL_HEATMAP_LAYER_ID,
+    type: "heatmap",
+    source: RAINFALL_SOURCE_ID,
+    maxzoom: 14,
+    layout: { visibility: visible ? "visible" : "none" },
+    paint: {
+      // Weight by risk intensity (1–4).
+      "heatmap-weight": [
+        "interpolate",
+        ["linear"],
+        ["get", "intensity"],
+        1, 0.2,
+        2, 0.5,
+        3, 0.8,
+        4, 1.0,
+      ],
+      // Radius grows with zoom so the heatmap stays readable at all scales.
+      "heatmap-radius": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        7, 20,
+        12, 50,
+      ],
+      // Color: match project risk palette (green → yellow → orange → red).
+      "heatmap-color": [
+        "interpolate",
+        ["linear"],
+        ["heatmap-density"],
+        0,   "rgba(0,0,0,0)",
+        0.2, "rgba(34,197,94,0.6)",
+        0.5, "rgba(234,179,8,0.7)",
+        0.8, "rgba(249,115,22,0.8)",
+        1.0, "rgba(239,68,68,0.9)",
+      ],
+      "heatmap-opacity": 0.75,
+    },
   };
 }
 

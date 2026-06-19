@@ -25,12 +25,10 @@ import {
 } from "@/components/map/basinArea";
 import { resolveMapStyle } from "@/components/map/mapStyle";
 import {
-  RAINFALL_FILL_LAYER_ID,
-  RAINFALL_OUTLINE_LAYER_ID,
+  RAINFALL_HEATMAP_LAYER_ID,
   RAINFALL_SOURCE_ID,
-  buildRainfallFeatureCollection,
-  buildRainfallFillLayer,
-  buildRainfallOutlineLayer,
+  buildRainfallHeatmapLayer,
+  buildRainfallPointFeatureCollection,
   buildRainfallSource,
 } from "@/components/map/rainfallSource";
 import {
@@ -238,8 +236,7 @@ export function BasinMap(props: BasinMapProps) {
 
       map.addLayer(buildRiskFillLayer(false));
       map.addLayer(buildRiskOutlineLayer(false));
-      map.addLayer(buildRainfallFillLayer(false));
-      map.addLayer(buildRainfallOutlineLayer(false));
+      map.addLayer(buildRainfallHeatmapLayer(false));
       // River network sits above the risk/rainfall fills so the waterway
       // geometry is readable, but below station pins and the basin boundary
       // outline so interactive markers stay on top.
@@ -381,7 +378,7 @@ export function BasinMap(props: BasinMapProps) {
     if (!map || !state.ready) return;
     const source = map.getSource(RAINFALL_SOURCE_ID) as GeoJSONSource | undefined;
     if (!source) return;
-    source.setData(buildRainfallFeatureCollection(selectedRainfallFrame));
+    source.setData(buildRainfallPointFeatureCollection(selectedRainfallFrame));
   }, [state.ready, selectedRainfallFrame]);
 
   // ---- Push station data updates. --------------------------------------
@@ -440,8 +437,7 @@ export function BasinMap(props: BasinMapProps) {
     const map = mapRef.current;
     if (!map || !state.ready) return;
     const visibility: Record<string, "visible" | "none"> = {
-      [RAINFALL_FILL_LAYER_ID]: activeLayer === "rain" ? "visible" : "none",
-      [RAINFALL_OUTLINE_LAYER_ID]: activeLayer === "rain" ? "visible" : "none",
+      [RAINFALL_HEATMAP_LAYER_ID]: activeLayer === "rain" ? "visible" : "none",
       [STATIONS_LAYER_ID]: activeLayer === "stations" ? "visible" : "none",
       [STATIONS_SELECTED_LAYER_ID]:
         activeLayer === "stations" ? "visible" : "none",
